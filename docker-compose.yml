@@ -1,0 +1,17 @@
+services:
+  fleet-stat:
+    build: .
+    container_name: fleet-stat
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - fleet-stat-data:/data
+      # Optional — Open WebUI session enrichment. Point at the directory that
+      # holds webui.db (a docker volume's _data dir), read-only. Put site-local
+      # mounts like this in docker-compose.override.yml (gitignored):
+      # - /var/lib/docker/volumes/open-webui/_data:/owui:ro
+
+volumes:
+  fleet-stat-data:

@@ -1,0 +1,101 @@
+# Fleet Stat — topology & sources
+# Copy to config.yaml and edit for YOUR fleet. This file is the point of the
+# tool: it teaches the dashboard which model runs on which box, context
+# ceilings, cluster membership, and which API key / IP belongs to which harness.
+
+poll:
+  prometheus_seconds: 10
+  litellm_seconds: 15
+  owui_seconds: 15
+
+sources:
+  # Required. Expected jobs: node_exporter (:9100), nvidia_gpu_exporter
+  # (:9835), vLLM /metrics scraped directly, optionally an ollama exporter.
+  prometheus:
+    url: http://prometheus.lan:9090
+
+  # Required. Needs a LiteLLM proxy with its database enabled (spend logs).
+  litellm:
+    url: http://litellm.lan:4000
+    master_key: sk-your-litellm-master-key
+
+  # Optional. Bind-mount Open WebUI's data dir read-only into the container
+  # (see docker-compose.yml) to enrich sessions with chat titles and users.
+  # Remove this block if you don't run Open WebUI.
+  openwebui:
+    db_path: /owui/webui.db
+    harness_id: openwebui     # which harness below is Open WebUI
+
+  # Not implemented yet — planned session-trace source.
+  langfuse:
+    enabled: false
+
+# Physical machines. node_instance / gpu_instance are the Prometheus
+# instance labels (host:port) of node_exporter / nvidia_gpu_exporter.
+nodes:
+  - id: gpu-box
+    label: gpu-box
+    hw: "Ryzen 7600X · RTX 4090 24GB"
+    node_instance: "10.0.0.10:9100"
+    gpu_instance: "10.0.0.10:9835"
+  - id: spark-1
+    label: spark-1
+    hw: "DGX Spark GB10 · 128GB unified"
+    node_instance: "10.0.0.11:9100"
+    cluster: big               # free-form tag grouping cluster members
+  - id: spark-2
+    label: spark-2
+    hw: "DGX Spark GB10 · 128GB unified"
+    node_instance: "10.0.0.12:9100"
+    cluster: big
+  - id: cpu-box
+    label: cpu-box
+    hw: "Mini PC · CPU-only ollama"
+    ollama: true               # no node_exporter; liveness via ollama exporter
+
+# Served models. `name` must match the LiteLLM model_group (the public model
+# name); `aliases` are other LiteLLM names routing to the same backend.
+# vllm_instance is the vLLM /metrics instance label in Prometheus.
+models:
+  - name: Qwen3-32B
+    hosts: [gpu-box]
+    engine: vllm
+    vllm_instance: "10.0.0.10:8000"
+    ctx: 131072
+    max_output: 16384
+    aliases: [code, chat]
+  - name: Big-MoE
+    hosts: [spark-1, spark-2]
+    cluster: true              # tensor-parallel across hosts; metrics on first host
+    engine: vllm
+    vllm_instance: "10.0.0.11:8000"
+    ctx: 1000000
+    max_output: 32768
+    aliases: [deep]
+  - name: embed
+    hosts: [cpu-box]
+    engine: ollama
+    ctx: 8192
+    hidden: true               # shown as a utility model, excluded from charts
+
+# The clients that talk to LiteLLM. Fixed display order = fixed chart colors.
+# Attribution: per-request key alias first, then requester IP, then master key.
+harnesses:
+  - id: openwebui
+    label: Open WebUI
+    key_alias: openwebui       # LiteLLM virtual-key alias
+    ips: ["10.0.0.20"]      # fallback: requests from this IP = this harness
+  - id: claude-code
+    label: Claude Code
+    key_alias: claude-code
+  - id: my-agent
+    label: My Agent
+    key_alias: my-agent
+  - id: admin
+    label: Admin / master key
+    master_key: true           # catch-all for master-key requests
+
+sessions:
+  gap_seconds: 1800            # a >30 min silence starts a new session
+  active_seconds: 300          # "active" = a request within the last 5 min
+  window_hours_default: 6
