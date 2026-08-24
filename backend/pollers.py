@@ -235,7 +235,8 @@ async def poll_litellm(cfg, store):
                     body = r.json()
                     rows = body.get("data") or []
                     norm = [_normalize_spend_row(cfg, x, keys) for x in rows]
-                    norm = [x for x in norm if x["request_id"] and x["start_ts"]]
+                    norm = [x for x in norm if x["request_id"] and x["start_ts"]
+                                and (x["model_group"] or x["total_tokens"])]
                     store.upsert_requests(norm)
                     fetched += len(norm)
                     for x in norm:
