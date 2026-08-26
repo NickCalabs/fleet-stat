@@ -3,7 +3,7 @@ import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query
+from fastapi import Body, FastAPI, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -66,8 +66,8 @@ def api_fleet():
         "nodes": [prom["nodes"].get(n["id"], {"id": n["id"], "label": n["label"],
                                               "hw": n.get("hw", ""), "up": None})
                   for n in cfg["nodes"]],
-        "models": [prom["models"].get(m["name"]) for m in cfg["models"]
-                   if prom["models"].get(m["name"])],
+        "models": [{**prom["models"][m["name"]], "identity": m.get("identity")}
+                   for m in cfg["models"] if prom["models"].get(m["name"])],
         "sources": {
             "prometheus": {"up": bool(prom["ts"]) and now - prom["ts"] < 60,
                            "error": prom.get("error")},
@@ -125,6 +125,57 @@ def api_usage(hours: int = Query(default=24, ge=1, le=2160),
         "series": ordered,
         "totals": store.totals(since, group),
     }
+
+
+def _norm(s):
+    return "".join(c for c in (s or "").lower() if c.isalnum())
+
+
+@app.get("/api/library")
+def api_library():
+    inv = store.get_library()
+    prom = state["prom"]
+    # what each node is serving right now
+    loaded_by_node = {}
+    for m in prom.get("models", {}).values():
+        served = m.get("served_model")
+        if m.get("up") and served:
+            for h in m.get("hosts", []):
+                loaded_by_node.setdefault(h, []).append(served)
+    for node_id, o in state["ollama"].items():
+        loaded_by_node.setdefault(node_id, []).extend(o.get("loaded") or [])
+
+    nodes = {}
+    for r in inv:
+        served = loaded_by_node.get(r["node"], [])
+        nr, loaded = _norm(r["model_id"]), False
+        for s in served:
+            ns = _norm(s)
+            if ns and (ns in nr or nr in ns):
+                loaded = True
+        entry = nodes.setdefault(r["node"], {"id": r["node"], "models": [],
+                                             "disk_bytes": 0})
+        entry["models"].append({**r, "loaded": loaded})
+        entry["disk_bytes"] += r.get("size_bytes") or 0
+    labels = {n["id"]: n["label"] for n in cfg["nodes"]}
+    out = [{**v, "label": labels.get(k, k)} for k, v in nodes.items()]
+    order = {n["id"]: i for i, n in enumerate(cfg["nodes"])}
+    out.sort(key=lambda n: order.get(n["id"], 99))
+    return {"nodes": out}
+
+
+@app.post("/api/library/tag")
+def api_library_tag(payload: dict = Body(...)):
+    store.set_tag(payload["node"], payload["model_id"],
+                  payload.get("status") or "untested", payload.get("notes") or "")
+    return {"ok": True}
+
+
+@app.post("/api/library/inventory")
+def api_library_inventory(payload: dict = Body(...)):
+    rows = payload.get("models") or []
+    store.replace_inventory(payload["node"], payload.get("source") or "hf-cache", rows)
+    return {"ok": True, "count": len(rows)}
 
 
 @app.get("/healthz")

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { usePoll } from './api.js'
 import Fleet from './views/Fleet.jsx'
+import Library from './views/Library.jsx'
 import Sessions from './views/Sessions.jsx'
 import Usage from './views/Usage.jsx'
 import { STATUS, slotMap } from './theme.js'
@@ -9,6 +10,7 @@ const TABS = [
   { id: 'fleet', label: 'Fleet' },
   { id: 'sessions', label: 'Sessions' },
   { id: 'usage', label: 'Usage' },
+  { id: 'library', label: 'Library' },
 ]
 
 function SourceDot({ name, ok }) {
@@ -70,6 +72,7 @@ export default function App() {
         {tab === 'fleet' && <Fleet fleet={fleet} />}
         {tab === 'sessions' && <Sessions harnessColors={harnessColors} />}
         {tab === 'usage' && <Usage config={config} labels={harnessLabels} />}
+        {tab === 'library' && <Library />}
       </main>
     </div>
   )

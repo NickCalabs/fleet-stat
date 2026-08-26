@@ -26,24 +26,51 @@ function TempBadge({ temp }) {
   )
 }
 
+function identityLine(id) {
+  if (!id) return null
+  const arch = id.arch === 'moe'
+    ? `MoE ${id.params}${id.active ? ` · ${id.active} active` : ''}`
+    : `dense ${id.params}`
+  return `${arch}${id.quant ? ` · ${id.quant}` : ''}`
+}
+
+function HostLive({ h, n }) {
+  if (!n) return null
+  const g = n.gpu
+  let stats = 'no metrics'
+  if (g) {
+    stats = `GPU ${fmtPct(g.util_pct)} · ${fmtGB(g.vram_used)} / ${fmtGB(g.vram_total)}` +
+      (g.temp != null ? ` · ${Math.round(g.temp)}°C` : '')
+  } else if (n.mem_pct != null) {
+    stats = `RAM ${fmtPct(n.mem_pct)}` +
+      (n.cpu_temp != null ? ` · ${Math.round(n.cpu_temp)}°C` : '')
+  }
+  return (
+    <div className="topo-row">
+      <span className="dot dot-sm"
+        style={{ background: n.up ? STATUS.good : STATUS.critical }} />
+      <span className="topo-host">{h}</span>
+      <span className="topo-stats">{stats}</span>
+    </div>
+  )
+}
+
 function ModelCard({ m, nodesById }) {
   const busy = (m.running || 0) > 0
+  const ident = identityLine(m.identity)
   return (
     <div className={`card ${m.up ? '' : 'card-down'}`}>
       <div className="card-head">
         <span className="card-title">{m.name}</span>
         <StatusDot up={m.up} label={m.up ? (busy ? 'generating' : 'up') : 'down'} />
       </div>
+      {ident && <div className="card-sub">{ident}</div>}
       <div className="chips">
-        {m.hosts.map((h) => (
-          <span className="chip" key={h}>
-            <span className="dot dot-sm"
-              style={{ background: nodesById[h]?.up ? STATUS.good : STATUS.critical }} />
-            {h}
-          </span>
-        ))}
         {m.cluster && <span className="chip chip-muted">TP=2 cluster</span>}
         <span className="chip chip-muted">{m.engine}</span>
+      </div>
+      <div className="topo">
+        {m.hosts.map((h) => <HostLive key={h} h={h} n={nodesById[h]} />)}
       </div>
       {m.up ? (
         <div className="kv-grid">
@@ -68,7 +95,7 @@ function ModelCard({ m, nodesById }) {
       )}
       <div className="card-foot">
         {fmtNum(m.ctx)} ctx · {fmtNum(m.max_output)} out
-        {m.served_model ? ` · serving ${m.served_model}` : ''}
+        {m.identity?.repo ? ` · ${m.identity.repo}` : (m.served_model ? ` · serving ${m.served_model}` : '')}
         {m.aliases?.length ? ` · aliases: ${m.aliases.join(', ')}` : ''}
       </div>
     </div>

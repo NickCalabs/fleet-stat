@@ -19,6 +19,7 @@ state = {
     "prom": {"ts": 0, "nodes": {}, "models": {}, "targets": {}, "error": None},
     "owui": {"ts": 0, "chats": [], "users": {}, "error": None},
     "litellm": {"ts": 0, "up": False, "keys": {}, "error": None},
+    "ollama": {},  # node_id -> {"loaded": [names], "ts": ...}
 }
 
 PROM_QUERIES = {
@@ -321,10 +322,56 @@ async def poll_owui(cfg):
         await asyncio.sleep(interval)
 
 
+def _parse_ollama_ts(s):
+    if not s:
+        return None
+    import re
+    s = re.sub(r"\.(\d{1,6})\d*", r".\1", s)  # ollama uses ns precision; trim to µs
+    try:
+        return datetime.fromisoformat(s).timestamp()
+    except ValueError:
+        return None
+
+
+async def poll_ollama_nodes(cfg, store):
+    """On-disk + loaded models from nodes serving via ollama (HTTP API, no SSH)."""
+    targets = [(n["id"], n["ollama_url"].rstrip("/"))
+               for n in cfg["nodes"] if n.get("ollama_url")]
+    if not targets:
+        return
+    async with httpx.AsyncClient() as client:
+        while True:
+            for node_id, base in targets:
+                try:
+                    tags = (await client.get(f"{base}/api/tags", timeout=8)).json()
+                    ps = (await client.get(f"{base}/api/ps", timeout=8)).json()
+                    rows = []
+                    for m in tags.get("models", []):
+                        d = m.get("details") or {}
+                        rows.append({
+                            "id": m["name"], "path": None,
+                            "size_bytes": m.get("size"),
+                            "mtime": _parse_ollama_ts(m.get("modified_at")),
+                            "quant": d.get("quantization_level"),
+                            "params": d.get("parameter_size"),
+                        })
+                    store.replace_inventory(node_id, "ollama", rows)
+                    state["ollama"][node_id] = {
+                        "loaded": [m["name"] for m in ps.get("models", [])],
+                        "ts": time.time(),
+                    }
+                except Exception as e:
+                    state["ollama"][node_id] = {**state["ollama"].get(node_id, {}),
+                                                "error": str(e)}
+                    log.warning("ollama poll %s failed: %s", node_id, e)
+            await asyncio.sleep(60)
+
+
 def start_pollers(cfg, store):
     tasks = [
         asyncio.create_task(poll_prometheus(cfg)),
         asyncio.create_task(poll_litellm(cfg, store)),
+        asyncio.create_task(poll_ollama_nodes(cfg, store)),
     ]
     if (cfg["sources"].get("openwebui") or {}).get("db_path"):
         tasks.append(asyncio.create_task(poll_owui(cfg)))

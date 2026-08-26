@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import threading
+import time
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS requests (
@@ -15,6 +16,17 @@ CREATE TABLE IF NOT EXISTS requests (
 CREATE INDEX IF NOT EXISTS idx_requests_start ON requests(start_ts);
 CREATE INDEX IF NOT EXISTS idx_requests_harness ON requests(harness, start_ts);
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS inventory (
+  node TEXT NOT NULL, model_id TEXT NOT NULL, source TEXT,
+  path TEXT, size_bytes INTEGER, mtime REAL,
+  quant TEXT, params TEXT, updated_at REAL,
+  PRIMARY KEY (node, model_id)
+);
+CREATE TABLE IF NOT EXISTS model_tags (
+  node TEXT NOT NULL, model_id TEXT NOT NULL,
+  status TEXT, notes TEXT, updated_at REAL,
+  PRIMARY KEY (node, model_id)
+);
 """
 
 REQUEST_COLS = [
@@ -95,6 +107,40 @@ class Store:
         with self._lock:
             rows = self._con.execute(sql, {"since": since_ts}).fetchall()
         return [dict(r) for r in rows]
+
+    def replace_inventory(self, node, source, rows):
+        now = time.time()
+        with self._lock:
+            self._con.execute("DELETE FROM inventory WHERE node=? AND source=?",
+                              (node, source))
+            self._con.executemany(
+                """INSERT OR REPLACE INTO inventory
+                   (node, model_id, source, path, size_bytes, mtime, quant, params, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?)""",
+                [(node, r.get("id"), source, r.get("path"), r.get("size_bytes"),
+                  r.get("mtime"), r.get("quant"), r.get("params"), now)
+                 for r in rows if r.get("id")])
+            self._con.commit()
+
+    def get_library(self):
+        with self._lock:
+            inv = [dict(r) for r in self._con.execute(
+                "SELECT * FROM inventory ORDER BY node, size_bytes DESC")]
+            tags = {(r["node"], r["model_id"]): dict(r) for r in self._con.execute(
+                "SELECT * FROM model_tags")}
+        for r in inv:
+            t = tags.get((r["node"], r["model_id"]), {})
+            r["status"] = t.get("status") or "untested"
+            r["notes"] = t.get("notes") or ""
+        return inv
+
+    def set_tag(self, node, model_id, status, notes):
+        with self._lock:
+            self._con.execute(
+                """INSERT OR REPLACE INTO model_tags (node, model_id, status, notes, updated_at)
+                   VALUES (?,?,?,?,?)""",
+                (node, model_id, status, notes, time.time()))
+            self._con.commit()
 
     def recent_requests(self, since_ts):
         with self._lock:

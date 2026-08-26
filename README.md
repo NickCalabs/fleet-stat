@@ -20,6 +20,12 @@ Three views, one container:
   their titles and users attached.
 - **Usage** — tokens, requests, and latency over time, grouped by harness or
   by model, with a totals table.
+- **Library** — a model registry per node: what is on disk (size, params,
+  quant), what is loaded right now, with keep/testing/prune status tags and
+  notes. Ollama nodes are inventoried automatically over HTTP; for HF-hub
+  caches, run `clients/collector/collect-hf-cache.sh` from a box with SSH
+  access to your GPU nodes (cron it) — it POSTs inventories to
+  `/api/library/inventory`, so SSH keys never enter the container.
 
 ## How it works
 

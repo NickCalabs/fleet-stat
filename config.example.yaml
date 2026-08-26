@@ -52,6 +52,7 @@ nodes:
     label: cpu-box
     hw: "Mini PC · CPU-only ollama"
     ollama: true               # no node_exporter; liveness via ollama exporter
+    ollama_url: http://10.0.0.13:11434   # optional: library inventory + loaded models
 
 # Served models. `name` must match the LiteLLM model_group (the public model
 # name); `aliases` are other LiteLLM names routing to the same backend.
@@ -64,6 +65,11 @@ models:
     ctx: 131072
     max_output: 16384
     aliases: [code, chat]
+    identity:                  # optional card metadata: the two numbers that matter
+      repo: Qwen/Qwen3-32B-FP8
+      arch: dense              # dense | moe
+      params: 32B
+      quant: FP8
   - name: Big-MoE
     hosts: [spark-1, spark-2]
     cluster: true              # tensor-parallel across hosts; metrics on first host
@@ -72,6 +78,12 @@ models:
     ctx: 1000000
     max_output: 32768
     aliases: [deep]
+    identity:
+      repo: example/Big-MoE-284B-FP8
+      arch: moe
+      params: 284B
+      active: A13B             # active params (MoE)
+      quant: FP8
   - name: embed
     hosts: [cpu-box]
     engine: ollama
