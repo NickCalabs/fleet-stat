@@ -35,7 +35,7 @@ PROM_QUERIES = {
     "gpu_power": "nvidia_smi_power_draw_watts",
     "vllm_running": "vllm:num_requests_running",
     "vllm_waiting": "vllm:num_requests_waiting",
-    "vllm_kv_cache": "vllm:gpu_cache_usage_perc",
+    "vllm_kv_cache": "vllm:kv_cache_usage_perc or vllm:gpu_cache_usage_perc",
     "vllm_prompt_tps": "rate(vllm:prompt_tokens_total[2m])",
     "vllm_gen_tps": "rate(vllm:generation_tokens_total[2m])",
     "ollama_up": "ollama_up",
