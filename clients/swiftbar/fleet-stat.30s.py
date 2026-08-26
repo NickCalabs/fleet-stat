@@ -97,7 +97,12 @@ for m in models:
     busy = (m.get("running") or 0) > 0
     stat = f"● {m.get('gen_tps') or 0:.0f} tok/s" if busy else "idle"
     host = "+".join(m.get("hosts") or [])
-    line = f"{'●' if busy else '○'} {m['name']}  {stat} · {host}"
+    ident = m.get("identity") or {}
+    id_s = ""
+    if ident:
+        core = f"A{ident['active'].lstrip('A')}" if ident.get("active") else ident.get("params", "")
+        id_s = f" · {core} {ident.get('quant', '')}".rstrip()
+    line = f"{'●' if busy else '○'} {m['name']}{id_s}  {stat} · {host}"
     color = f" color={GOOD}" if busy else ""
     print(f"{line} |{color} font=Menlo size=12")
 
@@ -135,6 +140,30 @@ if gpu_nodes:
             print(f"● {n['label']}  cpu {n.get('cpu_pct') or 0:.0f}% · "
                   f"ram {n.get('mem_pct') or 0:.0f}% | font=Menlo size=12")
 
+try:
+    lib = get("/api/library")["nodes"]
+except Exception:
+    lib = []
+if lib:
+    total_g = sum(n["disk_bytes"] for n in lib) / 1e9
+    total_m = sum(len(n["models"]) for n in lib)
+    print("---")
+    print(f"Library  {total_m} models · {total_g:.0f}G on disk | href={BASE}/#library")
+    for n in lib:
+        print(f"-- {n['label']}  {len(n['models'])} · {n['disk_bytes'] / 1e9:.0f}G "
+              f"| font=Menlo size=12")
+        for m in n["models"][:8]:
+            mark = "●" if m.get("loaded") else "○"
+            extra = f" color={GOOD}" if m.get("loaded") else ""
+            print(f"---- {mark} {trim(m['model_id'], 40)}  "
+                  f"{(m.get('size_bytes') or 0) / 1e9:.0f}G |{extra} font=Menlo size=11")
+
 print("---")
 print(f"Open dashboard | href={BASE}/")
 print("Refresh | refresh=true")
+_me = os.path.realpath(__file__)
+_raw = ("https://raw.githubusercontent.com/NickCalabs/fleet-stat/main/"
+        "clients/swiftbar/fleet-stat.30s.py")
+print(f"Update plugin | bash=/bin/bash param1=-c "
+      f"param2=\"curl -fsSL {_raw} -o '{_me}' && chmod +x '{_me}'\" "
+      f"terminal=false refresh=true")
