@@ -292,8 +292,15 @@ def _read_owui(db_path):
                        MAX(updated_at) AS last_msg_at,
                        MAX(CASE WHEN role='assistant' THEN model_id END) AS last_model
                 FROM chat_message WHERE chat_id IN ({ph}) GROUP BY chat_id""", ids)}
+        msg_ts = {}
+        for r in con.execute(
+            f"""SELECT chat_id, updated_at FROM chat_message
+                WHERE role='assistant' AND chat_id IN ({ph}) AND updated_at > ?""",
+            ids + [since]):
+            msg_ts.setdefault(r["chat_id"], []).append(r["updated_at"])
         for c in chats:
             c.update(stats.get(c["id"], {}))
+            c["msg_ts"] = sorted(msg_ts.get(c["id"], []))
             try:
                 c["models"] = json.loads(c["models"]) if c.get("models") else []
             except (TypeError, ValueError):
