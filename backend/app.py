@@ -55,6 +55,18 @@ def api_config():
     }
 
 
+def _fleet_model(m, prom):
+    out = {**prom["models"][m["name"]], "identity": m.get("identity")}
+    om = m.get("ollama_model")
+    if m.get("engine") == "ollama" and om:
+        loaded = []
+        for h in m.get("hosts", []):
+            loaded.extend(state["ollama"].get(h, {}).get("loaded") or [])
+        out["ollama_loaded"] = om in loaded
+        out["served_model"] = om
+    return out
+
+
 @app.get("/api/fleet")
 def api_fleet():
     prom = state["prom"]
@@ -66,8 +78,8 @@ def api_fleet():
         "nodes": [prom["nodes"].get(n["id"], {"id": n["id"], "label": n["label"],
                                               "hw": n.get("hw", ""), "up": None})
                   for n in cfg["nodes"]],
-        "models": [{**prom["models"][m["name"]], "identity": m.get("identity")}
-                   for m in cfg["models"] if prom["models"].get(m["name"])],
+        "models": [_fleet_model(m, prom) for m in cfg["models"]
+                   if prom["models"].get(m["name"])],
         "sources": {
             "prometheus": {"up": bool(prom["ts"]) and now - prom["ts"] < 60,
                            "error": prom.get("error")},

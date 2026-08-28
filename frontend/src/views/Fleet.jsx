@@ -68,6 +68,11 @@ function ModelCard({ m, nodesById }) {
       <div className="chips">
         {m.cluster && <span className="chip chip-muted">TP=2 cluster</span>}
         <span className="chip chip-muted">{m.engine}</span>
+        {m.engine === 'ollama' && m.ollama_loaded != null && (
+          m.ollama_loaded
+            ? <span className="chip chip-live">in memory</span>
+            : <span className="chip chip-muted">loads on demand</span>
+        )}
       </div>
       <div className="topo">
         {m.hosts.map((h) => <HostLive key={h} h={h} n={nodesById[h]} />)}
