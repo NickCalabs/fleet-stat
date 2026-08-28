@@ -56,9 +56,11 @@ def build_sessions(cfg, store, window_hours):
 
     sessions = []
     chat_by_id = {c["id"]: c for c in chats}
+    utility_ids = {h["id"] for h in cfg.get("harnesses", []) if h.get("utility")}
     for cid, rs in assigned.items():
         c = chat_by_id[cid]
         sessions.append({
+            "failed_requests": sum(1 for r in rs if r.get("status") == "failure"),
             "harness": owui_id,
             "model": max(rs, key=lambda r: r["start_ts"])["model_group"],
             "first_ts": min(r["start_ts"] for r in rs),
@@ -86,10 +88,13 @@ def build_sessions(cfg, store, window_hours):
                     "harness": harness, "model": model_group,
                     "first_ts": r["start_ts"], "last_ts": r["start_ts"],
                     "requests": 0, "tokens_total": 0, "ctx_tokens": 0,
+                    "failed_requests": 0,
                 }
                 gap_sessions.append(cur)
             cur["last_ts"] = r["end_ts"] or r["start_ts"]
             cur["requests"] += 1
+            if r.get("status") == "failure":
+                cur["failed_requests"] += 1
             cur["tokens_total"] += r["total_tokens"] or 0
             cur["ctx_tokens"] = max(
                 cur["ctx_tokens"],
@@ -122,6 +127,7 @@ def build_sessions(cfg, store, window_hours):
     for s in sessions:
         ceiling = model_ctx(cfg, s["model"]) if s["model"] else None
         fill = round(100.0 * s["ctx_tokens"] / ceiling, 1) if ceiling else None
+        fr = s.get("failed_requests") or 0
         out.append({
             **s,
             "harness_label": harness_labels.get(s["harness"], s["harness"]),
@@ -129,6 +135,8 @@ def build_sessions(cfg, store, window_hours):
             "fill_pct": fill,
             "active": (now - (s["last_ts"] or 0)) < active_s,
             "estimated": bool(s.get("estimated")),
+            "utility": s["harness"] in utility_ids,
+            "failed": bool(s.get("requests")) and fr >= s["requests"],
         })
     out.sort(key=lambda s: s["last_ts"] or 0, reverse=True)
     return out

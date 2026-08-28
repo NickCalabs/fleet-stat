@@ -108,7 +108,9 @@ for m in models:
 
 if sessions:
     print("---")
-    real = [s for s in sessions if s.get("model") or (s.get("ctx_tokens") or 0) > 0]
+    real = [s for s in sessions
+            if not s.get("utility") and not s.get("failed")
+            and (s.get("model") or (s.get("ctx_tokens") or 0) > 0)]
     shown = sorted(real, key=lambda s: (not s.get("active"), -(s.get("last_ts") or 0)))[:6]
     for s in shown:
         dot = "●" if s.get("active") else "○"

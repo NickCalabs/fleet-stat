@@ -14,8 +14,11 @@ const WINDOWS = [
 
 export default function Sessions({ harnessColors }) {
   const [win, setWin] = useState(24)
+  const [showBg, setShowBg] = useState(false)
   const { data, stale } = usePoll(`/api/sessions?hours=${win}`, 10000)
-  const sessions = data?.sessions || []
+  const all = data?.sessions || []
+  const bg = all.filter((s) => s.utility || s.failed)
+  const sessions = showBg ? all : all.filter((s) => !s.utility && !s.failed)
 
   return (
     <>
@@ -25,8 +28,12 @@ export default function Sessions({ harnessColors }) {
           <button key={w.h} className={`pill ${win === w.h ? 'pill-on' : ''}`}
             onClick={() => setWin(w.h)}>{w.label}</button>
         ))}
+        {bg.length > 0 && (
+          <button className={`pill ${showBg ? 'pill-on' : ''}`}
+            onClick={() => setShowBg(!showBg)}>background ({bg.length})</button>
+        )}
         <span className="filter-right">
-          {sessions.filter((s) => s.active).length} active · {sessions.length} in window
+          {sessions.filter((s) => s.active).length} active · {sessions.length} shown
         </span>
       </div>
       <div className={`session-list ${stale ? 'stale' : ''}`}>
@@ -47,8 +54,14 @@ export default function Sessions({ harnessColors }) {
                   <span className="session-title">
                     {s.title || `${s.model || 'unknown model'} session`}
                   </span>
-                  {s.active && <span className="chip chip-live">● live</span>}
+                  {s.active && !s.failed && <span className="chip chip-live">● live</span>}
                   {s.estimated && <span className="chip chip-muted">est.</span>}
+                  {s.utility && <span className="chip chip-muted">utility</span>}
+                  {s.failed && (
+                    <span className="chip" style={{ color: STATUS.critical, borderColor: STATUS.critical }}>
+                      ✕ {s.failed_requests} failed
+                    </span>
+                  )}
                 </div>
                 <div className="session-meta">
                   {s.model || '—'} · {s.requests} req · {fmtNum(s.tokens_total)} tok processed
