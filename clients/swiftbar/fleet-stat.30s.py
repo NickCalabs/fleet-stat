@@ -63,7 +63,7 @@ def trim(s, n=36):
 
 try:
     fleet = get("/api/fleet")
-    sessions = get("/api/sessions?hours=6")["sessions"]
+    sessions = get("/api/sessions?hours=72")["sessions"]
 except Exception:
     print(f"⬢ ⋯ | color={MUTED}")
     print("---")

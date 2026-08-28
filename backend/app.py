@@ -81,7 +81,7 @@ def api_fleet():
 
 
 @app.get("/api/sessions")
-def api_sessions(hours: float = Query(default=None, ge=0.1, le=48)):
+def api_sessions(hours: float = Query(default=None, ge=0.1, le=336)):
     hours = hours or cfg["sessions"]["window_hours_default"]
     return {"window_hours": hours, "sessions": build_sessions(cfg, store, hours)}
 

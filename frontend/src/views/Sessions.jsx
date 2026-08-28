@@ -6,13 +6,14 @@ import { fmtAgo, fmtNum } from '../format.js'
 
 const WINDOWS = [
   { label: '30 min', h: 0.5 },
-  { label: '2 h', h: 2 },
   { label: '6 h', h: 6 },
   { label: '24 h', h: 24 },
+  { label: '3 d', h: 72 },
+  { label: '7 d', h: 168 },
 ]
 
 export default function Sessions({ harnessColors }) {
-  const [win, setWin] = useState(6)
+  const [win, setWin] = useState(24)
   const { data, stale } = usePoll(`/api/sessions?hours=${win}`, 10000)
   const sessions = data?.sessions || []
 

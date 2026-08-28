@@ -273,13 +273,13 @@ def _read_owui(db_path):
 
     con = sqlite3.connect(dst)
     con.row_factory = sqlite3.Row
-    since = time.time() - 12 * 3600
+    since = time.time() - 7 * 86400  # keep a week of chats for title enrichment
     chats = []
     for r in con.execute(
         """SELECT c.id, c.title, c.user_id, c.updated_at,
                   json_extract(c.chat, '$.models') AS models
            FROM chat c WHERE c.updated_at > ? AND c.archived = 0
-           ORDER BY c.updated_at DESC LIMIT 100""", (since,)):
+           ORDER BY c.updated_at DESC LIMIT 250""", (since,)):
         chats.append(dict(r))
 
     if chats:
