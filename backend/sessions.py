@@ -58,15 +58,16 @@ def build_sessions(cfg, store, window_hours):
     for s in owui_sessions:
         best = None
         for c in chats:
-            if c["id"] in matched_chats:
-                continue
-            c_ts = c.get("last_msg_at") or c.get("updated_at") or 0
-            if not (s["first_ts"] - 600 <= c_ts <= s["last_ts"] + 600):
+            # a chat spans first..last message; a resumed conversation overlaps
+            # several gap-split sessions — every one of them gets the title
+            c_last = c.get("last_msg_at") or c.get("updated_at") or 0
+            c_first = c.get("first_msg_at") or c_last
+            if c_last + 600 < s["first_ts"] or c_first - 600 > s["last_ts"]:
                 continue
             c_models = [canon(m) for m in (c.get("models") or [])]
             if c_models and canon(s["model"]) not in c_models:
                 continue
-            d = abs(c_ts - s["last_ts"])
+            d = min(abs(c_last - s["last_ts"]), abs(c_first - s["first_ts"]))
             if best is None or d < best[0]:
                 best = (d, c)
         if best:
@@ -75,6 +76,24 @@ def build_sessions(cfg, store, window_hours):
             s["title"] = c.get("title")
             s["chat_id"] = c["id"]
             s["user"] = users.get(c.get("user_id"))
+
+    # Merge gap-split sessions of the same chat into one row per conversation.
+    by_chat = {}
+    merged_out = []
+    for s in sessions:
+        cid = s.get("chat_id")
+        if s["harness"] == owui_id and cid:
+            if cid in by_chat:
+                t = by_chat[cid]
+                t["first_ts"] = min(t["first_ts"], s["first_ts"])
+                t["last_ts"] = max(t["last_ts"], s["last_ts"])
+                t["requests"] += s["requests"]
+                t["tokens_total"] += s["tokens_total"]
+                t["ctx_tokens"] = max(t["ctx_tokens"], s["ctx_tokens"])
+                continue
+            by_chat[cid] = s
+        merged_out.append(s)
+    sessions = merged_out
 
     # OWUI chats active in the window that matched no spend rows -> estimated.
     # Skip chats whose activity overlaps any spend-backed OWUI session: that

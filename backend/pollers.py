@@ -288,6 +288,7 @@ def _read_owui(db_path):
         stats = {r["chat_id"]: dict(r) for r in con.execute(
             f"""SELECT chat_id, COUNT(*) AS n_msgs,
                        SUM(LENGTH(COALESCE(content,''))) AS chars,
+                       MIN(updated_at) AS first_msg_at,
                        MAX(updated_at) AS last_msg_at,
                        MAX(CASE WHEN role='assistant' THEN model_id END) AS last_model
                 FROM chat_message WHERE chat_id IN ({ph}) GROUP BY chat_id""", ids)}
