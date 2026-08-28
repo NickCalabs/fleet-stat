@@ -1,13 +1,29 @@
 import time
+from bisect import bisect_left
 
 from .config import model_ctx
 from .pollers import state
 
 
+def _nearest(sorted_ts, t):
+    if not sorted_ts:
+        return float("inf")
+    i = bisect_left(sorted_ts, t)
+    c1 = abs(sorted_ts[i] - t) if i < len(sorted_ts) else float("inf")
+    c0 = abs(sorted_ts[i - 1] - t) if i > 0 else float("inf")
+    return min(c0, c1)
+
+
 def build_sessions(cfg, store, window_hours):
-    """Fuse LiteLLM request rows into per-harness sessions, then enrich
-    Open WebUI sessions with chat titles (time+model correlation) and add
-    OWUI chats that produced no spend rows as estimated sessions."""
+    """One row per conversation.
+
+    Open WebUI requests are assigned to their chat individually — a spend-log
+    request finishes within seconds of its assistant message hitting the chat
+    DB, so per-request nearest-message matching (±120s) is near-exact. This is
+    the unit users think in; time-gap sessions crossed wires whenever two chats
+    ran back-to-back on the same model. Other harnesses (no chat DB) still use
+    gap-based sessions.
+    """
     now = time.time()
     gap = cfg["sessions"]["gap_seconds"]
     active_s = cfg["sessions"]["active_seconds"]
@@ -15,11 +31,52 @@ def build_sessions(cfg, store, window_hours):
     since = now - window_hours * 3600
 
     rows = store.recent_requests(since)
-    groups = {}
+    owui = state["owui"]
+    chats = list(owui.get("chats") or [])
+    users = owui.get("users") or {}
+    harness_labels = {h["id"]: h.get("label", h["id"]) for h in cfg.get("harnesses", [])}
+
+    # ── per-request chat assignment for the OWUI harness ──
+    assigned = {}          # chat_id -> [request rows]
+    loose = []             # requests for gap-based sessionization
     for r in rows:
-        groups.setdefault((r["harness"], r["model_group"]), []).append(r)
+        if r["harness"] != owui_id or not chats:
+            loose.append(r)
+            continue
+        rt = r["end_ts"] or r["start_ts"]
+        best = None
+        for c in chats:
+            d = _nearest(c.get("msg_ts") or [], rt)
+            if d <= 120 and (best is None or d < best[0]):
+                best = (d, c["id"])
+        if best:
+            assigned.setdefault(best[1], []).append(r)
+        else:
+            loose.append(r)
 
     sessions = []
+    chat_by_id = {c["id"]: c for c in chats}
+    for cid, rs in assigned.items():
+        c = chat_by_id[cid]
+        sessions.append({
+            "harness": owui_id,
+            "model": max(rs, key=lambda r: r["start_ts"])["model_group"],
+            "first_ts": min(r["start_ts"] for r in rs),
+            "last_ts": max(r["end_ts"] or r["start_ts"] for r in rs),
+            "requests": len(rs),
+            "tokens_total": sum(r["total_tokens"] or 0 for r in rs),
+            "ctx_tokens": max((r["prompt_tokens"] or 0) + (r["completion_tokens"] or 0)
+                              for r in rs),
+            "title": c.get("title"),
+            "chat_id": cid,
+            "user": users.get(c.get("user_id")),
+        })
+
+    # ── gap-based sessions for everything else ──
+    groups = {}
+    for r in loose:
+        groups.setdefault((r["harness"], r["model_group"]), []).append(r)
+    gap_sessions = []
     for (harness, model_group), rs in groups.items():
         rs.sort(key=lambda r: r["start_ts"])
         cur = None
@@ -29,103 +86,28 @@ def build_sessions(cfg, store, window_hours):
                     "harness": harness, "model": model_group,
                     "first_ts": r["start_ts"], "last_ts": r["start_ts"],
                     "requests": 0, "tokens_total": 0, "ctx_tokens": 0,
-                    "_req_ts": [],
                 }
-                sessions.append(cur)
+                gap_sessions.append(cur)
             cur["last_ts"] = r["end_ts"] or r["start_ts"]
-            cur["_req_ts"].append(cur["last_ts"])
             cur["requests"] += 1
             cur["tokens_total"] += r["total_tokens"] or 0
-            # Current context = the session's LARGEST prompt+completion, not the
-            # newest: OWUI fires small title/tag/follow-up task calls after each
-            # turn, so the newest request is usually a ~500-token aux call.
-            # Real conversation context grows monotonically, so max is right.
             cur["ctx_tokens"] = max(
                 cur["ctx_tokens"],
                 (r["prompt_tokens"] or 0) + (r["completion_tokens"] or 0),
             )
+    sessions.extend(gap_sessions)
 
-    owui = state["owui"]
-    chats = list(owui.get("chats") or [])
-    users = owui.get("users") or {}
-    harness_labels = {h["id"]: h.get("label", h["id"]) for h in cfg.get("harnesses", [])}
-
-    # Attach OWUI chat titles to openwebui sessions by time+model proximity.
-    def canon(name):
-        m = cfg["_models_by_name"].get(name)
-        return m["name"] if m else name
-
-    # Per-request attribution: a spend-log request finishes within seconds of
-    # its assistant message being written to the chat DB. Count, per chat, how
-    # many of the session's requests land within ±120s of one of that chat's
-    # message timestamps — far more precise than span overlap, which crossed
-    # wires when two chats on the same model were active in the same period.
-    from bisect import bisect_left
-
-    def nearest(sorted_ts, t):
-        if not sorted_ts:
-            return float("inf")
-        i = bisect_left(sorted_ts, t)
-        c1 = abs(sorted_ts[i] - t) if i < len(sorted_ts) else float("inf")
-        c0 = abs(sorted_ts[i - 1] - t) if i > 0 else float("inf")
-        return min(c0, c1)
-
-    matched_chats = set()
-    owui_sessions = [s for s in sessions if s["harness"] == owui_id]
-    for s in owui_sessions:
-        best = None
-        for c in chats:
-            ts_list = c.get("msg_ts") or []
-            hits, near = 0, float("inf")
-            for rt in s.get("_req_ts") or []:
-                d = nearest(ts_list, rt)
-                if d <= 120:
-                    hits += 1
-                near = min(near, d)
-            if not hits:
-                continue
-            score = (hits, -near)
-            if best is None or score > best[0]:
-                best = (score, c)
-        if best:
-            _, c = best
-            matched_chats.add(c["id"])
-            s["title"] = c.get("title")
-            s["chat_id"] = c["id"]
-            s["user"] = users.get(c.get("user_id"))
-
-    # Merge gap-split sessions of the same chat into one row per conversation.
-    by_chat = {}
-    merged_out = []
-    for s in sessions:
-        cid = s.get("chat_id")
-        if s["harness"] == owui_id and cid:
-            if cid in by_chat:
-                t = by_chat[cid]
-                t["first_ts"] = min(t["first_ts"], s["first_ts"])
-                t["last_ts"] = max(t["last_ts"], s["last_ts"])
-                t["requests"] += s["requests"]
-                t["tokens_total"] += s["tokens_total"]
-                t["ctx_tokens"] = max(t["ctx_tokens"], s["ctx_tokens"])
-                continue
-            by_chat[cid] = s
-        merged_out.append(s)
-    sessions = merged_out
-
-    # OWUI chats active in the window that matched no spend rows -> estimated.
-    # Skip chats whose activity overlaps any spend-backed OWUI session: that
-    # traffic is already represented, only the title-match failed.
-    def overlaps_session(c_ts):
-        return any(s["first_ts"] - 600 <= c_ts <= s["last_ts"] + 600 for s in owui_sessions)
+    # ── OWUI chats with no spend rows (predate spend logging) -> estimated ──
+    def overlaps_gap_session(c_ts):
+        return any(s["harness"] == owui_id and
+                   s["first_ts"] - 600 <= c_ts <= s["last_ts"] + 600
+                   for s in gap_sessions)
 
     for c in chats:
         c_ts = c.get("last_msg_at") or c.get("updated_at") or 0
-        if c["id"] in matched_chats or c_ts < since or overlaps_session(c_ts):
+        if c["id"] in assigned or c_ts < since or overlaps_gap_session(c_ts):
             continue
-        model = None
-        for m in c.get("models") or []:
-            model = m
-            break
+        model = next(iter(c.get("models") or []), None)
         est_tokens = int((c.get("chars") or 0) / 4)
         sessions.append({
             "harness": owui_id, "model": model or c.get("last_model"),
@@ -138,7 +120,6 @@ def build_sessions(cfg, store, window_hours):
 
     out = []
     for s in sessions:
-        s.pop("_req_ts", None)
         ceiling = model_ctx(cfg, s["model"]) if s["model"] else None
         fill = round(100.0 * s["ctx_tokens"] / ceiling, 1) if ceiling else None
         out.append({
