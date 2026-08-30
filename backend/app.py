@@ -57,6 +57,13 @@ def api_config():
 
 def _fleet_model(m, prom):
     out = {**prom["models"][m["name"]], "identity": m.get("identity")}
+    if m.get("engine") == "comfyui":
+        c = state["comfy"].get(m["name"]) or {}
+        out.update({
+            "up": c.get("up", False), "running": c.get("running"),
+            "waiting": c.get("pending"), "served_model": c.get("current_model"),
+            "comfy": {k: c.get(k) for k in ("vram_total", "vram_free", "version")},
+        })
     om = m.get("ollama_model")
     if m.get("engine") == "ollama" and om:
         loaded = []

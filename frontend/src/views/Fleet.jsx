@@ -77,7 +77,20 @@ function ModelCard({ m, nodesById }) {
       <div className="topo">
         {m.hosts.map((h) => <HostLive key={h} h={h} n={nodesById[h]} />)}
       </div>
-      {m.up ? (
+      {m.up && m.engine === 'comfyui' ? (
+        <div className="kv-grid">
+          <span className="kv"><span className="kv-label">generating</span>
+            <span className="kv-val">{m.running ?? 0}{(m.running || 0) > 0 && <span className="pulse" />}</span></span>
+          <span className="kv"><span className="kv-label">queued</span>
+            <span className="kv-val">{m.waiting ?? 0}</span></span>
+          <span className="kv"><span className="kv-label">VRAM held</span>
+            <span className="kv-val">
+              {m.comfy?.vram_total ? fmtGB(m.comfy.vram_total - m.comfy.vram_free) : '—'}
+            </span></span>
+          <span className="kv"><span className="kv-label">version</span>
+            <span className="kv-val">{m.comfy?.version || '—'}</span></span>
+        </div>
+      ) : m.up ? (
         <div className="kv-grid">
           <span className="kv"><span className="kv-label">running</span>
             <span className="kv-val">{m.running ?? 0}{busy && <span className="pulse" />}</span></span>
@@ -99,7 +112,7 @@ function ModelCard({ m, nodesById }) {
         </div>
       )}
       <div className="card-foot">
-        {fmtNum(m.ctx)} ctx · {fmtNum(m.max_output)} out
+        {m.ctx ? `${fmtNum(m.ctx)} ctx · ${fmtNum(m.max_output)} out` : 'image generation'}
         {m.identity?.repo ? ` · ${m.identity.repo}` : (m.served_model ? ` · serving ${m.served_model}` : '')}
         {m.aliases?.length ? ` · aliases: ${m.aliases.join(', ')}` : ''}
       </div>

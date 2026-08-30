@@ -20,6 +20,7 @@ state = {
     "owui": {"ts": 0, "chats": [], "users": {}, "error": None},
     "litellm": {"ts": 0, "up": False, "keys": {}, "error": None},
     "ollama": {},  # node_id -> {"loaded": [names], "ts": ...}
+    "comfy": {},   # model name -> {"up", "running", "pending", "vram_*", ...}
 }
 
 PROM_QUERIES = {
@@ -375,11 +376,51 @@ async def poll_ollama_nodes(cfg, store):
             await asyncio.sleep(60)
 
 
+def _comfy_current_model(queue_running):
+    try:
+        prompt = queue_running[0][2]
+        for node in prompt.values():
+            for k in ("ckpt_name", "unet_name", "model"):
+                v = (node.get("inputs") or {}).get(k)
+                if isinstance(v, str) and v:
+                    return v
+    except (IndexError, KeyError, AttributeError, TypeError):
+        pass
+    return None
+
+
+async def poll_comfy(cfg):
+    targets = [(m["name"], m["comfy_url"].rstrip("/"))
+               for m in cfg["models"] if m.get("engine") == "comfyui" and m.get("comfy_url")]
+    if not targets:
+        return
+    async with httpx.AsyncClient() as client:
+        while True:
+            for name, base in targets:
+                try:
+                    stats = (await client.get(f"{base}/system_stats", timeout=6)).json()
+                    q = (await client.get(f"{base}/queue", timeout=6)).json()
+                    dev = (stats.get("devices") or [{}])[0]
+                    state["comfy"][name] = {
+                        "up": True, "ts": time.time(),
+                        "running": len(q.get("queue_running") or []),
+                        "pending": len(q.get("queue_pending") or []),
+                        "vram_total": dev.get("vram_total"),
+                        "vram_free": dev.get("vram_free"),
+                        "version": (stats.get("system") or {}).get("comfyui_version"),
+                        "current_model": _comfy_current_model(q.get("queue_running") or []),
+                    }
+                except Exception as e:
+                    state["comfy"][name] = {"up": False, "ts": time.time(), "error": str(e)}
+            await asyncio.sleep(20)
+
+
 def start_pollers(cfg, store):
     tasks = [
         asyncio.create_task(poll_prometheus(cfg)),
         asyncio.create_task(poll_litellm(cfg, store)),
         asyncio.create_task(poll_ollama_nodes(cfg, store)),
+        asyncio.create_task(poll_comfy(cfg)),
     ]
     if (cfg["sources"].get("openwebui") or {}).get("db_path"):
         tasks.append(asyncio.create_task(poll_owui(cfg)))
