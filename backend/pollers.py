@@ -401,6 +401,14 @@ async def poll_comfy(cfg):
                     stats = (await client.get(f"{base}/system_stats", timeout=6)).json()
                     q = (await client.get(f"{base}/queue", timeout=6)).json()
                     dev = (stats.get("devices") or [{}])[0]
+                    last_model = None
+                    try:
+                        hist = (await client.get(f"{base}/history?max_items=1",
+                                                 timeout=6)).json()
+                        for item in hist.values():
+                            last_model = _comfy_current_model([item.get("prompt")])
+                    except Exception:
+                        pass
                     state["comfy"][name] = {
                         "up": True, "ts": time.time(),
                         "running": len(q.get("queue_running") or []),
@@ -408,7 +416,8 @@ async def poll_comfy(cfg):
                         "vram_total": dev.get("vram_total"),
                         "vram_free": dev.get("vram_free"),
                         "version": (stats.get("system") or {}).get("comfyui_version"),
-                        "current_model": _comfy_current_model(q.get("queue_running") or []),
+                        "current_model": _comfy_current_model(q.get("queue_running") or [])
+                                         or last_model,
                     }
                 except Exception as e:
                     state["comfy"][name] = {"up": False, "ts": time.time(), "error": str(e)}
