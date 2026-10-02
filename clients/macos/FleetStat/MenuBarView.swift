@@ -60,7 +60,7 @@ struct MenuBarView: View {
         }
         .frame(width: 420)
         .background(.ultraThinMaterial)
-        .onAppear { editingURL = service.baseURL }
+        .onAppear { editingURL = service.baseURL ?? "" }
     }
 
     @ViewBuilder
@@ -553,7 +553,7 @@ struct MenuBarView: View {
                 Text("Server URL")
                     .font(.system(size: 11, weight: .semibold))
                 HStack(spacing: 8) {
-                    TextField("http://localhost:8090", text: $editingURL)
+                    TextField("http://your-server:8090", text: $editingURL)
                         .textFieldStyle(.roundedBorder)
                         .font(.system(size: 11, design: .monospaced))
                     Button("Save") { saveServerURL() }
@@ -668,21 +668,34 @@ struct MenuBarView: View {
 
     private var unreachableView: some View {
         VStack(spacing: 10) {
-            Image(systemName: "wifi.slash")
-                .font(.system(size: 28))
-                .foregroundStyle(.secondary)
-            Text("Fleet Stat unreachable")
-                .font(.system(size: 13, weight: .medium))
-            Text(service.baseURL)
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(.secondary)
-            Text("On the road? Check WireGuard.")
-                .font(.system(size: 10))
-                .foregroundStyle(.secondary)
+            if let url = service.baseURL {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
+                Text("Fleet Stat unreachable")
+                    .font(.system(size: 13, weight: .medium))
+                Text(url)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Text("Check that the server is running and reachable from this Mac.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            } else {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 28))
+                    .foregroundStyle(.secondary)
+                Text("Welcome to Fleet Stat")
+                    .font(.system(size: 13, weight: .medium))
+                Text("Add your Fleet Stat server URL in Settings to get started.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
             HStack(spacing: 12) {
-                Button("Retry") { Task { await service.refresh() } }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
+                if service.isConfigured {
+                    Button("Retry") { Task { await service.refresh() } }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
                 Button("Settings") {
                     selectedTab = .settings
                     service.data.reachable = true
@@ -700,7 +713,7 @@ struct MenuBarView: View {
 
     private var footerView: some View {
         HStack {
-            if let url = URL(string: service.baseURL) {
+            if let base = service.baseURL, let url = URL(string: base) {
                 Link(destination: url) {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.up.right.square")

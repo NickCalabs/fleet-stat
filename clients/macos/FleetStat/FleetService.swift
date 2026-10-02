@@ -199,13 +199,15 @@ class FleetService: ObservableObject {
         return c
     }())
 
-    var baseURL: String {
-        if let url = try? String(contentsOfFile: NSString("~/.config/fleet-stat/server").expandingTildeInPath, encoding: .utf8) {
-            let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed }
-        }
-        return "http://localhost:8090"
+    /// Server URL from ~/.config/fleet-stat/server, or nil if not set yet.
+    var baseURL: String? {
+        guard let url = try? String(contentsOfFile: NSString("~/.config/fleet-stat/server").expandingTildeInPath, encoding: .utf8) else { return nil }
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return nil }
+        return trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
     }
+
+    var isConfigured: Bool { baseURL != nil }
 
     private var interval: TimeInterval = 30
 
@@ -233,6 +235,10 @@ class FleetService: ObservableObject {
     }
 
     func refresh() async {
+        guard isConfigured else {
+            data.reachable = false
+            return
+        }
         do {
             async let fleetReq = fetch(FleetResponse.self, path: "/api/fleet")
             async let sessionsReq = fetch(SessionsResponse.self, path: "/api/sessions?hours=6")
@@ -262,7 +268,7 @@ class FleetService: ObservableObject {
     }
 
     private func fetch<T: Decodable>(_ type: T.Type, path: String) async throws -> T {
-        let url = URL(string: baseURL + path)!
+        guard let base = baseURL, let url = URL(string: base + path) else { throw URLError(.badURL) }
         var request = URLRequest(url: url)
         request.setValue("FleetStat-macOS", forHTTPHeaderField: "User-Agent")
         let (responseData, _) = try await urlSession.data(for: request)
