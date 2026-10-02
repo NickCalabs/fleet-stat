@@ -26,6 +26,13 @@ Three views, one container:
   caches, run `clients/collector/collect-hf-cache.sh` from a box with SSH
   access to your GPU nodes (cron it) — it POSTs inventories to
   `/api/library/inventory`, so SSH keys never enter the container.
+- **Events** — a curated, live feed of what changed across the fleet: models
+  going up/down or switching weights, ollama loads/unloads, ComfyUI jobs, GPU
+  heat crossings, data-source failures, and bursts of failed LiteLLM requests
+  (detected in-process), plus engine/kernel log lines worth seeing (vLLM
+  errors and restarts, OOM kills, Xid faults) pushed by
+  `clients/collector/collect-logs.py`. Not a log viewer: access logs and
+  throughput chatter are dropped, secrets are redacted at ingest.
 
 ## How it works
 
@@ -43,6 +50,31 @@ session's **largest** prompt+completion — chat UIs fire small title/tag
 generation calls after each turn, so the newest request is usually not the
 conversation. Requests are attributed to harnesses by LiteLLM virtual-key
 alias first, then by requester IP.
+
+### Harness-reported session titles
+
+A proxy only sees model + key + source IP, so a CLI agent's session name
+(Claude Code, etc.) can't be read server-side. A harness can report it:
+
+```
+POST /api/sessions/report
+Authorization: Bearer <that harness's report_token>
+{"session_id": "abc123", "event": "start" | "stop" | "ping",
+ "title": "Fix the parser", "model": "code", "ts": 1767225600}
+```
+
+`start` (prompt sent) → `stop` (turn done) brackets a turn; every request
+from that harness inside the bracket belongs to that session. The token
+decides the harness. A ready-made Claude Code hook is in
+`clients/hooks/claude-code/`. Sessions with no reports stay labeled by
+harness + model.
+
+### API for clients
+
+`/api/fleet`, `/api/sessions?hours=`, `/api/usage?hours=&group=`,
+`/api/library`, `/api/events?after=&hours=&level=&node=` (newest first,
+returns a `cursor`), and `/api/events/stream` (server-sent events, one
+`event` message per new row; pass `after=<cursor>`).
 
 ## Quick start
 
@@ -76,6 +108,9 @@ services:
 There is no auth. The dashboard exposes usage data, chat titles, and your
 config holds the LiteLLM master key — run it on a trusted LAN or behind an
 authenticating reverse proxy, and keep `config.yaml` out of git (it already is).
+The two write endpoints that external scripts call can be locked down:
+`events.ingest_token` guards `/api/events/ingest`, and each harness's
+`report_token` guards (and identifies) `/api/sessions/report`.
 
 ## Development
 

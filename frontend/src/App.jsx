@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { usePoll } from './api.js'
+import Events from './views/Events.jsx'
 import Fleet from './views/Fleet.jsx'
 import Library from './views/Library.jsx'
 import Sessions from './views/Sessions.jsx'
@@ -11,6 +12,7 @@ const TABS = [
   { id: 'sessions', label: 'Sessions' },
   { id: 'usage', label: 'Usage' },
   { id: 'library', label: 'Library' },
+  { id: 'events', label: 'Events' },
 ]
 
 function SourceDot({ name, ok }) {
@@ -28,6 +30,8 @@ export default function App() {
   const setTab = (id) => { setTabState(id); window.location.hash = id }
   const { data: fleet, stale } = usePoll('/api/fleet', 10000)
   const { data: config } = usePoll('/api/config', 300000)
+  const { data: recentErr } = usePoll('/api/events?hours=1&level=error&limit=100', 30000)
+  const errCount = recentErr?.events?.length || 0
 
   const harnessColors = useMemo(
     () => slotMap((config?.harnesses || []).map((h) => h.id)),
@@ -50,7 +54,13 @@ export default function App() {
         <nav>
           {TABS.map((t) => (
             <button key={t.id} className={`tab ${tab === t.id ? 'tab-on' : ''}`}
-              onClick={() => setTab(t.id)}>{t.label}</button>
+              onClick={() => setTab(t.id)}>
+              {t.label}
+              {t.id === 'events' && errCount > 0 && (
+                <span className="tab-badge" title={`${errCount} errors in the last hour`}
+                  style={{ background: STATUS.critical }}>{errCount}</span>
+              )}
+            </button>
           ))}
         </nav>
         <div className="header-right">
@@ -73,6 +83,7 @@ export default function App() {
         {tab === 'sessions' && <Sessions harnessColors={harnessColors} />}
         {tab === 'usage' && <Usage config={config} labels={harnessLabels} />}
         {tab === 'library' && <Library />}
+        {tab === 'events' && <Events />}
       </main>
     </div>
   )

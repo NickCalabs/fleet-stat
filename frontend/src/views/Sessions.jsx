@@ -56,6 +56,9 @@ export default function Sessions({ harnessColors }) {
                   </span>
                   {s.active && !s.failed && <span className="chip chip-live">● live</span>}
                   {s.estimated && <span className="chip chip-muted">est.</span>}
+                  {s.reported && (
+                    <span className="chip chip-muted" title="title reported by the harness itself">reported</span>
+                  )}
                   {s.utility && <span className="chip chip-muted">utility</span>}
                   {s.failed && (
                     <span className="chip" style={{ color: STATUS.critical, borderColor: STATUS.critical }}>

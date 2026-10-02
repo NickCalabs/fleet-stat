@@ -100,12 +100,24 @@ harnesses:
   - id: claude-code
     label: Claude Code
     key_alias: claude-code
+    # Optional: let the harness report its own session titles
+    # (POST /api/sessions/report — see clients/hooks/claude-code/).
+    report_token: change-me-long-random-string
+    # Also claim requests attributed to these harnesses (e.g. the client
+    # still uses the master key, or sits behind a VPN NAT IP).
+    match_harnesses: [admin]
   - id: my-agent
     label: My Agent
     key_alias: my-agent
   - id: admin
     label: Admin / master key
     master_key: true           # catch-all for master-key requests
+
+events:
+  retention_days: 14
+  gpu_temp_warn: 85            # °C — emits a warning event on crossing
+  # Optional shared secret for POST /api/events/ingest (log collector).
+  ingest_token: change-me-another-random-string
 
 sessions:
   gap_seconds: 1800            # a >30 min silence starts a new session

@@ -27,7 +27,22 @@ CREATE TABLE IF NOT EXISTS model_tags (
   status TEXT, notes TEXT, updated_at REAL,
   PRIMARY KEY (node, model_id)
 );
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY,
+  seq INTEGER,
+  ts REAL, node TEXT, source TEXT, kind TEXT, level TEXT,
+  title TEXT, detail TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_events_seq ON events(seq);
+CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+CREATE TABLE IF NOT EXISTS session_reports (
+  harness TEXT NOT NULL, session_id TEXT NOT NULL,
+  event TEXT, ts REAL NOT NULL, title TEXT, model TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_reports_ts ON session_reports(ts);
 """
+
+EVENT_LEVELS = ("info", "warn", "error")
 
 REQUEST_COLS = [
     "request_id", "start_ts", "end_ts", "completion_start_ts",
@@ -146,5 +161,68 @@ class Store:
         with self._lock:
             rows = self._con.execute(
                 "SELECT * FROM requests WHERE start_ts >= ? ORDER BY start_ts", (since_ts,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    # ── events ──
+    def add_events(self, events):
+        """Insert events; duplicates (same id) are ignored. Returns rows inserted."""
+        if not events:
+            return 0
+        with self._lock:
+            seq = self._con.execute("SELECT COALESCE(MAX(seq), 0) FROM events").fetchone()[0]
+            n = 0
+            for e in events:
+                cur = self._con.execute(
+                    """INSERT OR IGNORE INTO events
+                       (id, seq, ts, node, source, kind, level, title, detail)
+                       VALUES (?,?,?,?,?,?,?,?,?)""",
+                    (e["id"], seq + n + 1, e["ts"], e.get("node"), e.get("source"),
+                     e.get("kind"), e.get("level") or "info", e.get("title"),
+                     e.get("detail")))
+                n += cur.rowcount
+            self._con.commit()
+        return n
+
+    def get_events(self, after_seq=0, since_ts=None, limit=200, levels=None, node=None):
+        where, args = ["seq > ?"], [after_seq]
+        if since_ts:
+            where.append("ts >= ?")
+            args.append(since_ts)
+        if levels:
+            where.append("level IN ({})".format(",".join("?" for _ in levels)))
+            args.extend(levels)
+        if node:
+            where.append("node = ?")
+            args.append(node)
+        sql = ("SELECT * FROM events WHERE " + " AND ".join(where) +
+               " ORDER BY ts DESC, seq DESC LIMIT ?")
+        with self._lock:
+            rows = self._con.execute(sql, args + [limit]).fetchall()
+        return [dict(r) for r in rows]
+
+    def max_event_seq(self):
+        with self._lock:
+            return self._con.execute("SELECT COALESCE(MAX(seq), 0) FROM events").fetchone()[0]
+
+    def prune_events(self, older_than_ts):
+        with self._lock:
+            self._con.execute("DELETE FROM events WHERE ts < ?", (older_than_ts,))
+            self._con.execute("DELETE FROM session_reports WHERE ts < ?",
+                              (older_than_ts,))
+            self._con.commit()
+
+    # ── harness-reported sessions ──
+    def add_session_report(self, harness, session_id, event, ts, title, model):
+        with self._lock:
+            self._con.execute(
+                """INSERT INTO session_reports (harness, session_id, event, ts, title, model)
+                   VALUES (?,?,?,?,?,?)""", (harness, session_id, event, ts, title, model))
+            self._con.commit()
+
+    def session_reports(self, since_ts):
+        with self._lock:
+            rows = self._con.execute(
+                "SELECT * FROM session_reports WHERE ts >= ? ORDER BY ts", (since_ts,)
             ).fetchall()
         return [dict(r) for r in rows]

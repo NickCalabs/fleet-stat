@@ -1,13 +1,17 @@
+import asyncio
+import hmac
+import json
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import Body, FastAPI, Query
-from fastapi.responses import FileResponse
+from fastapi import Body, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import load_config
+from .events import LEVELS, Detector, normalize_ingest
 from .pollers import start_pollers, state
 from .sessions import build_sessions
 from .store import Store
@@ -31,6 +35,7 @@ def _bucket_for(hours):
 @asynccontextmanager
 async def lifespan(app):
     tasks = start_pollers(cfg, store)
+    tasks.append(asyncio.create_task(Detector(cfg, store).run()))
     yield
     for t in tasks:
         t.cancel()
@@ -195,6 +200,96 @@ def api_library_inventory(payload: dict = Body(...)):
     rows = payload.get("models") or []
     store.replace_inventory(payload["node"], payload.get("source") or "hf-cache", rows)
     return {"ok": True, "count": len(rows)}
+
+
+def _bearer(authorization):
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:].strip()
+    return None
+
+
+def _levels_from(min_level):
+    if not min_level:
+        return None
+    return list(LEVELS[LEVELS.index(min_level):])
+
+
+@app.get("/api/events")
+def api_events(after: int = Query(default=0, ge=0),
+               hours: float = Query(default=24, gt=0, le=24 * 30),
+               limit: int = Query(default=200, ge=1, le=1000),
+               level: str = Query(default=None, pattern="^(info|warn|error)$"),
+               node: str = Query(default=None, max_length=64)):
+    """Newest first. `cursor` = highest seq seen; pass it back as `after`."""
+    rows = store.get_events(after_seq=after, since_ts=time.time() - hours * 3600,
+                            limit=limit, levels=_levels_from(level), node=node)
+    return {"cursor": max([r["seq"] for r in rows] + [after or store.max_event_seq()]),
+            "events": rows}
+
+
+@app.get("/api/events/stream")
+async def api_events_stream(request: Request,
+                            after: int = Query(default=None, ge=0),
+                            level: str = Query(default=None,
+                                               pattern="^(info|warn|error)$")):
+    """Server-sent events: one `event` message per new row, oldest first."""
+    cursor = store.max_event_seq() if after is None else after
+    levels = _levels_from(level)
+
+    async def gen():
+        nonlocal cursor
+        yield "retry: 5000\n\n"
+        last_beat = time.time()
+        while not await request.is_disconnected():
+            rows = store.get_events(after_seq=cursor, limit=500, levels=levels)
+            for r in reversed(rows):
+                cursor = max(cursor, r["seq"])
+                yield f"id: {r['seq']}\nevent: event\ndata: {json.dumps(r)}\n\n"
+            if time.time() - last_beat > 20:
+                yield ": keepalive\n\n"
+                last_beat = time.time()
+            await asyncio.sleep(2)
+
+    return StreamingResponse(gen(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache",
+                                      "X-Accel-Buffering": "no"})
+
+
+@app.post("/api/events/ingest")
+def api_events_ingest(payload: dict = Body(...),
+                      authorization: str = Header(default=None)):
+    want = (cfg.get("events") or {}).get("ingest_token")
+    if want and not hmac.compare_digest(_bearer(authorization) or "", want):
+        raise HTTPException(401, "bad ingest token")
+    events = normalize_ingest(payload)
+    return {"ok": True, "received": len(events), "inserted": store.add_events(events)}
+
+
+@app.post("/api/sessions/report")
+def api_sessions_report(payload: dict = Body(...),
+                        authorization: str = Header(default=None)):
+    """A harness reports its own session identity (title, id) per turn.
+
+    Auth: the harness's `report_token` from config. The token decides which
+    harness this is — the payload can't claim another harness's sessions.
+    """
+    tok = _bearer(authorization) or ""
+    harness = next((h["id"] for h in cfg["harnesses"]
+                    if h.get("report_token")
+                    and hmac.compare_digest(tok, h["report_token"])), None)
+    if not harness:
+        raise HTTPException(401, "unknown report token")
+    sid = str(payload.get("session_id") or "")[:128]
+    event = payload.get("event") or "ping"
+    if not sid or event not in ("start", "stop", "ping"):
+        raise HTTPException(422, "need session_id and event in start|stop|ping")
+    ts = float(payload.get("ts") or time.time())
+    if abs(ts - time.time()) > 3600:
+        ts = time.time()   # client clock is off; trust arrival time instead
+    title = (str(payload["title"]).strip()[:200] or None) if payload.get("title") else None
+    model = str(payload["model"])[:128] if payload.get("model") else None
+    store.add_session_report(harness, sid, event, ts, title, model)
+    return {"ok": True, "harness": harness}
 
 
 @app.get("/healthz")

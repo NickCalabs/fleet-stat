@@ -14,6 +14,40 @@ def _nearest(sorted_ts, t):
     return min(c0, c1)
 
 
+def _report_intervals(cfg, reports, now):
+    """Turn harness pings into turn intervals per reported session.
+
+    A `start` (prompt submitted) opens a turn, the next `stop` closes it; a bare
+    `ping` covers ±120s. Claude-Code-style harnesses make many requests per turn
+    (tool loops), so intervals beat nearest-timestamp matching here.
+    """
+    by_sess = {}
+    for r in reports:
+        by_sess.setdefault((r["harness"], r["session_id"]), []).append(r)
+    canon = lambda m: (cfg["_models_by_name"].get(m) or {}).get("name", m) if m else None
+    intervals, meta = [], {}
+    turn_max = cfg["sessions"].get("report_turn_max_seconds", 3600)
+    for key, pings in by_sess.items():
+        pings.sort(key=lambda p: p["ts"])
+        titled = [p for p in pings if p.get("title")]
+        modeled = [p for p in pings if p.get("model")]
+        meta[key] = {"title": titled[-1]["title"] if titled else None,
+                     "model": canon(modeled[-1]["model"]) if modeled else None}
+        for i, p in enumerate(pings):
+            if p["event"] == "start":
+                end = None
+                for q in pings[i + 1:]:
+                    end = q["ts"]
+                    if q["event"] in ("stop", "start"):
+                        break
+                if end is None or end == p["ts"]:
+                    end = min(p["ts"] + turn_max, now)
+                intervals.append((p["ts"] - 15, end + 30, p["ts"], key))
+            elif p["event"] == "ping":
+                intervals.append((p["ts"] - 120, p["ts"] + 120, p["ts"], key))
+    return intervals, meta
+
+
 def build_sessions(cfg, store, window_hours):
     """One row per conversation.
 
@@ -54,7 +88,49 @@ def build_sessions(cfg, store, window_hours):
         else:
             loose.append(r)
 
+    # ── harness-reported sessions (POST /api/sessions/report) ──
+    reporters = {h["id"]: {h["id"], *(h.get("match_harnesses") or [])}
+                 for h in cfg.get("harnesses", []) if h.get("report_token")}
+    reported = {}
+    if reporters and loose:
+        intervals, rmeta = _report_intervals(
+            cfg, store.session_reports(since - 7200), now)
+        still_loose = []
+        for r in loose:
+            best = None
+            for lo, hi, t0, key in intervals:
+                if not (lo <= r["start_ts"] <= hi):
+                    continue
+                if r["harness"] not in reporters.get(key[0], ()):
+                    continue
+                m = rmeta[key]["model"]
+                if m and r["model_group"] and m != r["model_group"]:
+                    continue
+                if best is None or t0 > best[0]:   # latest turn start wins
+                    best = (t0, key)
+            if best:
+                reported.setdefault(best[1], []).append(r)
+            else:
+                still_loose.append(r)
+        loose = still_loose
+
     sessions = []
+    for (harness, sid), rs in reported.items():
+        sessions.append({
+            "failed_requests": sum(1 for r in rs if r.get("status") == "failure"),
+            "harness": harness,
+            "model": max(rs, key=lambda r: r["start_ts"])["model_group"],
+            "first_ts": min(r["start_ts"] for r in rs),
+            "last_ts": max(r["end_ts"] or r["start_ts"] for r in rs),
+            "requests": len(rs),
+            "tokens_total": sum(r["total_tokens"] or 0 for r in rs),
+            "ctx_tokens": max((r["prompt_tokens"] or 0) + (r["completion_tokens"] or 0)
+                              for r in rs),
+            "title": rmeta[(harness, sid)]["title"],
+            "chat_id": f"{harness}:{sid}",
+            "reported": True,
+        })
+
     chat_by_id = {c["id"]: c for c in chats}
     utility_ids = {h["id"] for h in cfg.get("harnesses", []) if h.get("utility")}
     for cid, rs in assigned.items():
@@ -135,6 +211,7 @@ def build_sessions(cfg, store, window_hours):
             "fill_pct": fill,
             "active": (now - (s["last_ts"] or 0)) < active_s,
             "estimated": bool(s.get("estimated")),
+            "reported": bool(s.get("reported")),
             "utility": s["harness"] in utility_ids,
             "failed": bool(s.get("requests")) and fr >= s["requests"],
         })
