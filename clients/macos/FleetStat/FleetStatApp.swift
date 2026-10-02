@@ -28,6 +28,7 @@ struct MenuBarIcon: View {
     private var tps: Double { up.reduce(0.0) { $0 + ($1.gen_tps ?? 0) } }
     private var isGenerating: Bool { tps >= 1 }
     private var isDown: Bool { up.count < models.count && !models.isEmpty }
+    private var hasRecentErrors: Bool { !service.errorsLastHour.isEmpty }
 
     var body: some View {
         HStack(spacing: 4) {
@@ -83,7 +84,7 @@ struct MenuBarIcon: View {
 
     private var iconColor: Color {
         if !service.data.reachable { return .secondary }
-        if isDown { return .red }
+        if isDown || hasRecentErrors { return .red }
         if isGenerating { return .green }
         return .primary
     }

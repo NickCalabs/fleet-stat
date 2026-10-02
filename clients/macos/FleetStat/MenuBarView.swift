@@ -111,6 +111,12 @@ struct MenuBarView: View {
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundStyle(.green)
             }
+            if !service.errorsLastHour.isEmpty {
+                Text("\(service.errorsLastHour.count) err")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.red)
+                    .help("Errors in the last hour")
+            }
             if !active.isEmpty {
                 Text("\(active.count) active")
                     .font(.system(size: 11, design: .monospaced))
@@ -156,6 +162,10 @@ struct MenuBarView: View {
     private var overviewSection: some View {
         let s = service.stats
         return VStack(alignment: .leading, spacing: 10) {
+            if !service.data.events.isEmpty {
+                recentEventsCard
+            }
+
             // Usage header card
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
@@ -289,6 +299,37 @@ struct MenuBarView: View {
                 }
             }
         }
+    }
+
+    private var recentEventsCard: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Recent Events")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.secondary)
+            ForEach(service.data.events) { e in
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(e.isError ? Color.red : Color.orange)
+                        .frame(width: 6, height: 6)
+                    Text(timeString(e.ts))
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                    if let node = e.node {
+                        Text(node)
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    Text(e.title)
+                        .font(.system(size: 10))
+                        .foregroundStyle(e.isError ? .red : .primary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .help(e.detail ?? e.title)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 8))
     }
 
     private func statColumn(_ label: String, value: String) -> some View {
@@ -656,6 +697,7 @@ struct MenuBarView: View {
             withIntermediateDirectories: true
         )
         try? url.write(toFile: path, atomically: true, encoding: .utf8)
+        service.restartEventStream()
         withAnimation { showingURLSaved = true }
         Task {
             await service.refresh()
@@ -800,6 +842,12 @@ struct MenuBarView: View {
         if n >= 1e6 { return String(format: "%.1fM", n / 1e6) }
         if n >= 1e3 { return String(format: "%.0fK", n / 1e3) }
         return "\(Int(n))"
+    }
+
+    private func timeString(_ ts: Double) -> String {
+        let fmt = DateFormatter()
+        fmt.dateFormat = "HH:mm"
+        return fmt.string(from: Date(timeIntervalSince1970: ts))
     }
 
     private func agoString(_ ts: Double?) -> String {

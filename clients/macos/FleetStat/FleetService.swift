@@ -6,6 +6,8 @@ struct FleetData {
     var sessions: [Session] = []
     var sessions7d: [Session] = []
     var library: [LibraryNode] = []
+    var events: [FleetEvent] = []      // warn+ in the last 24h, newest first
+    var errors1h: [FleetEvent] = []    // errors in the last hour, newest first
     var reachable: Bool = false
 }
 
@@ -88,6 +90,26 @@ struct FleetResponse: Codable {
 
 struct LibraryResponse: Codable {
     let nodes: [LibraryNode]
+}
+
+struct FleetEvent: Codable, Identifiable {
+    let id: String
+    let seq: Int?
+    let ts: Double
+    let node: String?
+    let source: String?
+    let kind: String?
+    let level: String
+    let title: String
+    let detail: String?
+
+    var isError: Bool { level == "error" }
+    var isWarnOrWorse: Bool { level == "warn" || level == "error" }
+}
+
+struct EventsResponse: Codable {
+    let cursor: Int?
+    let events: [FleetEvent]
 }
 
 // MARK: - Computed stats
@@ -199,6 +221,18 @@ class FleetService: ObservableObject {
         return c
     }())
 
+    // Event stream connections stay open, so they get their own session without the short resource timeout.
+    private let streamSession = URLSession(configuration: {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForRequest = 120
+        c.timeoutIntervalForResource = 7 * 24 * 3600
+        return c
+    }())
+    private var streamTask: Task<Void, Never>?
+    private var lastSeq: Int?
+
+    static let eventLimit = 8
+
     /// Server URL from ~/.config/fleet-stat/server, or nil if not set yet.
     var baseURL: String? {
         guard let url = try? String(contentsOfFile: NSString("~/.config/fleet-stat/server").expandingTildeInPath, encoding: .utf8) else { return nil }
@@ -208,6 +242,11 @@ class FleetService: ObservableObject {
     }
 
     var isConfigured: Bool { baseURL != nil }
+
+    var errorsLastHour: [FleetEvent] {
+        let cutoff = Date().timeIntervalSince1970 - 3600
+        return data.errors1h.filter { $0.ts >= cutoff }
+    }
 
     private var interval: TimeInterval = 30
 
@@ -253,17 +292,85 @@ class FleetService: ObservableObject {
                 lib = libResp.nodes
             }
 
+            // Events are optional: older servers don't have them.
+            async let eventsReq = fetch(EventsResponse.self, path: "/api/events?hours=24&level=warn&limit=\(Self.eventLimit)")
+            async let errorsReq = fetch(EventsResponse.self, path: "/api/events?hours=1&level=error&limit=200")
+            let events = try? await eventsReq
+            let errors = try? await errorsReq
+            if let cursor = events?.cursor ?? errors?.cursor {
+                lastSeq = max(lastSeq ?? cursor, cursor)
+            }
+
             data = FleetData(
                 models: fleet.models.filter { !($0.hidden ?? false) },
                 nodes: fleet.nodes,
                 sessions: sessions.sessions,
                 sessions7d: sessions7d.sessions,
                 library: lib,
+                events: events?.events ?? data.events,
+                errors1h: errors?.events ?? data.errors1h,
                 reachable: true
             )
             stats = UsageStats.compute(from: sessions7d.sessions)
+            if lastSeq != nil { startEventStream() }
         } catch {
             data.reachable = false
+        }
+    }
+
+    // MARK: - Live events (server-sent events)
+
+    /// Call after the server URL changes so the stream reconnects to the new server.
+    func restartEventStream() {
+        streamTask?.cancel()
+        streamTask = nil
+        lastSeq = nil
+        data.events = []
+        data.errors1h = []
+    }
+
+    private func startEventStream() {
+        guard streamTask == nil else { return }
+        streamTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                await self.consumeEventStream()
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+    }
+
+    private func consumeEventStream() async {
+        guard let base = baseURL, let after = lastSeq,
+              let url = URL(string: base + "/api/events/stream?after=\(after)") else { return }
+        var request = URLRequest(url: url)
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("FleetStat-macOS", forHTTPHeaderField: "User-Agent")
+        do {
+            let (bytes, response) = try await streamSession.bytes(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+            // One `data:` line per event; `.lines` drops the blank separator lines.
+            for try await line in bytes.lines {
+                if line.hasPrefix("id:"), let id = Int(line.dropFirst(3).trimmingCharacters(in: .whitespaces)) {
+                    lastSeq = max(lastSeq ?? id, id)
+                } else if line.hasPrefix("data:") {
+                    let json = line.dropFirst(5).trimmingCharacters(in: .whitespaces)
+                    if let event = try? JSONDecoder().decode(FleetEvent.self, from: Data(json.utf8)) {
+                        ingest(event)
+                    }
+                }
+            }
+        } catch {
+            // Dropped connection or cancellation; the loop reconnects from lastSeq.
+        }
+    }
+
+    private func ingest(_ event: FleetEvent) {
+        if let seq = event.seq { lastSeq = max(lastSeq ?? seq, seq) }
+        guard event.isWarnOrWorse, !data.events.contains(where: { $0.id == event.id }) else { return }
+        data.events = Array((data.events + [event]).sorted { $0.ts > $1.ts }.prefix(Self.eventLimit))
+        if event.isError {
+            data.errors1h = (data.errors1h + [event]).sorted { $0.ts > $1.ts }
         }
     }
 
