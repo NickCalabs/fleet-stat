@@ -60,6 +60,7 @@ struct Session: Codable, Identifiable {
     let harness: String?
     let harness_label: String?
     let failed: Bool?
+    let reported: Bool?
 
     var stableID: String { id ?? UUID().uuidString }
     var isReal: Bool { !(utility ?? false) && (model != nil || (ctx_tokens ?? 0) > 0) }

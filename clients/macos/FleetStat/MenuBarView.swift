@@ -374,9 +374,17 @@ struct MenuBarView: View {
                     .fill((s.active ?? false) ? Color.green : Color.secondary.opacity(0.5))
                     .frame(width: 8, height: 8)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(truncate(s.title ?? "\(s.model ?? "?") session", to: 30))
-                        .font(.system(size: 11, weight: .medium))
-                        .lineLimit(1)
+                    HStack(spacing: 4) {
+                        Text(truncate(s.title ?? "\(s.model ?? "?") session", to: 30))
+                            .font(.system(size: 11, weight: .medium))
+                            .lineLimit(1)
+                        if s.reported ?? false {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.blue)
+                                .help("Title reported by the harness")
+                        }
+                    }
                     if let label = s.harness_label ?? s.harness {
                         Text(label)
                             .font(.system(size: 9))
