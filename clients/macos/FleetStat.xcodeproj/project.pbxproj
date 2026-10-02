@@ -1,0 +1,554 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		01FE0BDE30411C0A00B18A1B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 01FE0BC430411C0800B18A1B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 01FE0BCB30411C0800B18A1B;
+			remoteInfo = FleetStat;
+		};
+		01FE0BE830411C0A00B18A1B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 01FE0BC430411C0800B18A1B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 01FE0BCB30411C0800B18A1B;
+			remoteInfo = FleetStat;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		01FE0BCC30411C0800B18A1B /* FleetStat.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FleetStat.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		01FE0BDD30411C0A00B18A1B /* FleetStatTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FleetStatTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		01FE0BE730411C0A00B18A1B /* FleetStatUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FleetStatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		01FE0BCE30411C0800B18A1B /* FleetStat */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FleetStat;
+			sourceTree = "<group>";
+		};
+		01FE0BE030411C0A00B18A1B /* FleetStatTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FleetStatTests;
+			sourceTree = "<group>";
+		};
+		01FE0BEA30411C0A00B18A1B /* FleetStatUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FleetStatUITests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		01FE0BC930411C0800B18A1B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		01FE0BDA30411C0A00B18A1B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		01FE0BE430411C0A00B18A1B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		01FE0BC330411C0800B18A1B = {
+			isa = PBXGroup;
+			children = (
+				01FE0BCE30411C0800B18A1B /* FleetStat */,
+				01FE0BE030411C0A00B18A1B /* FleetStatTests */,
+				01FE0BEA30411C0A00B18A1B /* FleetStatUITests */,
+				01FE0BCD30411C0800B18A1B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		01FE0BCD30411C0800B18A1B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				01FE0BCC30411C0800B18A1B /* FleetStat.app */,
+				01FE0BDD30411C0A00B18A1B /* FleetStatTests.xctest */,
+				01FE0BE730411C0A00B18A1B /* FleetStatUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		01FE0BCB30411C0800B18A1B /* FleetStat */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 01FE0BF130411C0A00B18A1B /* Build configuration list for PBXNativeTarget "FleetStat" */;
+			buildPhases = (
+				01FE0BC830411C0800B18A1B /* Sources */,
+				01FE0BC930411C0800B18A1B /* Frameworks */,
+				01FE0BCA30411C0800B18A1B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				01FE0BCE30411C0800B18A1B /* FleetStat */,
+			);
+			name = FleetStat;
+			packageProductDependencies = (
+			);
+			productName = FleetStat;
+			productReference = 01FE0BCC30411C0800B18A1B /* FleetStat.app */;
+			productType = "com.apple.product-type.application";
+		};
+		01FE0BDC30411C0A00B18A1B /* FleetStatTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 01FE0BF430411C0A00B18A1B /* Build configuration list for PBXNativeTarget "FleetStatTests" */;
+			buildPhases = (
+				01FE0BD930411C0A00B18A1B /* Sources */,
+				01FE0BDA30411C0A00B18A1B /* Frameworks */,
+				01FE0BDB30411C0A00B18A1B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				01FE0BDF30411C0A00B18A1B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				01FE0BE030411C0A00B18A1B /* FleetStatTests */,
+			);
+			name = FleetStatTests;
+			packageProductDependencies = (
+			);
+			productName = FleetStatTests;
+			productReference = 01FE0BDD30411C0A00B18A1B /* FleetStatTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		01FE0BE630411C0A00B18A1B /* FleetStatUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 01FE0BF730411C0A00B18A1B /* Build configuration list for PBXNativeTarget "FleetStatUITests" */;
+			buildPhases = (
+				01FE0BE330411C0A00B18A1B /* Sources */,
+				01FE0BE430411C0A00B18A1B /* Frameworks */,
+				01FE0BE530411C0A00B18A1B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				01FE0BE930411C0A00B18A1B /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				01FE0BEA30411C0A00B18A1B /* FleetStatUITests */,
+			);
+			name = FleetStatUITests;
+			packageProductDependencies = (
+			);
+			productName = FleetStatUITests;
+			productReference = 01FE0BE730411C0A00B18A1B /* FleetStatUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		01FE0BC430411C0800B18A1B /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					01FE0BCB30411C0800B18A1B = {
+						CreatedOnToolsVersion = 16.2;
+					};
+					01FE0BDC30411C0A00B18A1B = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 01FE0BCB30411C0800B18A1B;
+					};
+					01FE0BE630411C0A00B18A1B = {
+						CreatedOnToolsVersion = 16.2;
+						TestTargetID = 01FE0BCB30411C0800B18A1B;
+					};
+				};
+			};
+			buildConfigurationList = 01FE0BC730411C0800B18A1B /* Build configuration list for PBXProject "FleetStat" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 01FE0BC330411C0800B18A1B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 01FE0BCD30411C0800B18A1B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				01FE0BCB30411C0800B18A1B /* FleetStat */,
+				01FE0BDC30411C0A00B18A1B /* FleetStatTests */,
+				01FE0BE630411C0A00B18A1B /* FleetStatUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		01FE0BCA30411C0800B18A1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		01FE0BDB30411C0A00B18A1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		01FE0BE530411C0A00B18A1B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		01FE0BC830411C0800B18A1B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		01FE0BD930411C0A00B18A1B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		01FE0BE330411C0A00B18A1B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		01FE0BDF30411C0A00B18A1B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 01FE0BCB30411C0800B18A1B /* FleetStat */;
+			targetProxy = 01FE0BDE30411C0A00B18A1B /* PBXContainerItemProxy */;
+		};
+		01FE0BE930411C0A00B18A1B /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 01FE0BCB30411C0800B18A1B /* FleetStat */;
+			targetProxy = 01FE0BE830411C0A00B18A1B /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		01FE0BEF30411C0A00B18A1B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		01FE0BF030411C0A00B18A1B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		01FE0BF230411C0A00B18A1B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FleetStat/FleetStat.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"FleetStat/Preview Content\"";
+				DEVELOPMENT_TEAM = 8WW98934U5;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nickcalabs.FleetStat;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		01FE0BF330411C0A00B18A1B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = FleetStat/FleetStat.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "\"FleetStat/Preview Content\"";
+				DEVELOPMENT_TEAM = 8WW98934U5;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nickcalabs.FleetStat;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		01FE0BF530411C0A00B18A1B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8WW98934U5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nickcalabs.FleetStatTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FleetStat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FleetStat";
+			};
+			name = Debug;
+		};
+		01FE0BF630411C0A00B18A1B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8WW98934U5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.1;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nickcalabs.FleetStatTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FleetStat.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FleetStat";
+			};
+			name = Release;
+		};
+		01FE0BF830411C0A00B18A1B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8WW98934U5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nickcalabs.FleetStatUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = FleetStat;
+			};
+			name = Debug;
+		};
+		01FE0BF930411C0A00B18A1B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 8WW98934U5;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.nickcalabs.FleetStatUITests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_TARGET_NAME = FleetStat;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		01FE0BC730411C0800B18A1B /* Build configuration list for PBXProject "FleetStat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01FE0BEF30411C0A00B18A1B /* Debug */,
+				01FE0BF030411C0A00B18A1B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		01FE0BF130411C0A00B18A1B /* Build configuration list for PBXNativeTarget "FleetStat" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01FE0BF230411C0A00B18A1B /* Debug */,
+				01FE0BF330411C0A00B18A1B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		01FE0BF430411C0A00B18A1B /* Build configuration list for PBXNativeTarget "FleetStatTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01FE0BF530411C0A00B18A1B /* Debug */,
+				01FE0BF630411C0A00B18A1B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		01FE0BF730411C0A00B18A1B /* Build configuration list for PBXNativeTarget "FleetStatUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				01FE0BF830411C0A00B18A1B /* Debug */,
+				01FE0BF930411C0A00B18A1B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 01FE0BC430411C0800B18A1B /* Project object */;
+}
