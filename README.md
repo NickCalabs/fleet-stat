@@ -76,6 +76,8 @@ harness + model.
 returns a `cursor`), and `/api/events/stream` (server-sent events, one
 `event` message per new row; pass `after=<cursor>`).
 
+A native macOS menu bar client lives in `clients/macos/`.
+
 ## Quick start
 
 Requirements: Docker, a Prometheus already scraping your nodes, and a LiteLLM
