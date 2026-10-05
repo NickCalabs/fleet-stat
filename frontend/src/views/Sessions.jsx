@@ -67,9 +67,20 @@ export default function Sessions({ harnessColors }) {
                   )}
                 </div>
                 <div className="session-meta">
-                  {s.model || '—'} · {s.requests} req · {fmtNum(s.tokens_total)} tok processed
+                  {s.model_alias && s.model_alias !== s.model ? s.model_alias : (s.model || '—')}
+                  {' '}· {s.requests} req · {fmtNum(s.tokens_total)} tok processed
                   {s.user ? ` · ${s.user}` : ''} · {fmtAgo(s.last_ts)}
                 </div>
+                {s.models && s.models.length > 1 && (
+                  <div className="session-models">
+                    {s.models.map((m) => (
+                      <span key={m.name} className="chip chip-muted"
+                        title={m.aliases.length ? `requested as ${m.aliases.join(', ')}` : undefined}>
+                        {m.name} · {m.requests} req
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="session-ctx">
                 <div className="meter-row">
@@ -80,6 +91,9 @@ export default function Sessions({ harnessColors }) {
                     {s.fill_pct != null ? ` · ${s.fill_pct}%` : ''}
                   </span>
                 </div>
+                {s.ctx_peak > s.ctx_tokens * 1.2 && (
+                  <div className="ctx-peak">peak {fmtNum(s.ctx_peak)} · compacted since</div>
+                )}
                 {near && (
                   <div className="ctx-warn" style={{ color: STATUS.warning }}>
                     ⚠ near context ceiling

@@ -268,10 +268,12 @@ def api_events_ingest(payload: dict = Body(...),
 @app.post("/api/sessions/report")
 def api_sessions_report(payload: dict = Body(...),
                         authorization: str = Header(default=None)):
-    """A harness reports its own session identity (title, id) per turn.
+    """A harness reports its own session identity (title, id).
 
-    Auth: the harness's `report_token` from config. The token decides which
-    harness this is — the payload can't claim another harness's sessions.
+    Body is one report or {"reports": [...]}. Each report: session_id, event
+    (start|stop|ping), optional title, model, ts, and request_ids — the
+    LiteLLM/OpenAI response ids it received, which link requests exactly.
+    Auth: the harness's `report_token`; the token decides which harness this is.
     """
     tok = _bearer(authorization) or ""
     harness = next((h["id"] for h in cfg["harnesses"]
@@ -279,17 +281,30 @@ def api_sessions_report(payload: dict = Body(...),
                     and hmac.compare_digest(tok, h["report_token"])), None)
     if not harness:
         raise HTTPException(401, "unknown report token")
-    sid = str(payload.get("session_id") or "")[:128]
-    event = payload.get("event") or "ping"
-    if not sid or event not in ("start", "stop", "ping"):
-        raise HTTPException(422, "need session_id and event in start|stop|ping")
-    ts = float(payload.get("ts") or time.time())
-    if abs(ts - time.time()) > 3600:
-        ts = time.time()   # client clock is off; trust arrival time instead
-    title = (str(payload["title"]).strip()[:200] or None) if payload.get("title") else None
-    model = str(payload["model"])[:128] if payload.get("model") else None
-    store.add_session_report(harness, sid, event, ts, title, model)
-    return {"ok": True, "harness": harness}
+    reports = payload.get("reports") if "reports" in payload else [payload]
+    if not isinstance(reports, list) or len(reports) > 500:
+        raise HTTPException(422, "reports must be a list of at most 500")
+    now = time.time()
+    n_ids = 0
+    for rep in reports:
+        sid = str(rep.get("session_id") or "")[:128]
+        event = rep.get("event") or "ping"
+        if not sid or event not in ("start", "stop", "ping"):
+            raise HTTPException(422, "need session_id and event in start|stop|ping")
+        try:
+            ts = float(rep.get("ts") or now)
+        except (TypeError, ValueError):
+            ts = now
+        if ts > now + 300 or ts < now - 14 * 86400:
+            ts = now   # implausible client clock; trust arrival time instead
+        title = (str(rep["title"]).strip()[:200] or None) if rep.get("title") else None
+        model = str(rep["model"])[:128] if rep.get("model") else None
+        store.add_session_report(harness, sid, event, ts, title, model)
+        ids = [str(i)[:128] for i in (rep.get("request_ids") or [])[:5000] if i]
+        if ids:
+            store.map_requests(harness, sid, ids, ts)
+            n_ids += len(ids)
+    return {"ok": True, "harness": harness, "reports": len(reports), "request_ids": n_ids}
 
 
 @app.get("/healthz")

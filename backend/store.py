@@ -40,6 +40,10 @@ CREATE TABLE IF NOT EXISTS session_reports (
   event TEXT, ts REAL NOT NULL, title TEXT, model TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_reports_ts ON session_reports(ts);
+CREATE TABLE IF NOT EXISTS session_request_map (
+  request_id TEXT PRIMARY KEY, harness TEXT NOT NULL, session_id TEXT NOT NULL,
+  ts REAL
+);
 """
 
 EVENT_LEVELS = ("info", "warn", "error")
@@ -50,7 +54,7 @@ REQUEST_COLS = [
     "key_hash", "key_alias", "harness",
     "user_id", "requester_ip",
     "prompt_tokens", "completion_tokens", "total_tokens",
-    "spend", "call_type", "status",
+    "spend", "call_type", "status", "model_alias",
 ]
 
 
@@ -63,6 +67,9 @@ class Store:
         self._con.execute("PRAGMA journal_mode=WAL")
         with self._lock:
             self._con.executescript(SCHEMA)
+            cols = {r[1] for r in self._con.execute("PRAGMA table_info(requests)")}
+            if "model_alias" not in cols:   # the name the client asked for (e.g. a -Deep alias)
+                self._con.execute("ALTER TABLE requests ADD COLUMN model_alias TEXT")
 
     def upsert_requests(self, rows):
         if not rows:
@@ -210,6 +217,8 @@ class Store:
             self._con.execute("DELETE FROM events WHERE ts < ?", (older_than_ts,))
             self._con.execute("DELETE FROM session_reports WHERE ts < ?",
                               (older_than_ts,))
+            self._con.execute("DELETE FROM session_request_map WHERE ts < ?",
+                              (older_than_ts - 30 * 86400,))
             self._con.commit()
 
     # ── harness-reported sessions ──
@@ -219,6 +228,25 @@ class Store:
                 """INSERT INTO session_reports (harness, session_id, event, ts, title, model)
                    VALUES (?,?,?,?,?,?)""", (harness, session_id, event, ts, title, model))
             self._con.commit()
+
+    def map_requests(self, harness, session_id, request_ids, ts):
+        with self._lock:
+            self._con.executemany(
+                """INSERT OR REPLACE INTO session_request_map (request_id, harness, session_id, ts)
+                   VALUES (?,?,?,?)""", [(rid, harness, session_id, ts) for rid in request_ids])
+            self._con.commit()
+
+    def request_map(self, request_ids):
+        out = {}
+        ids = list(request_ids)
+        with self._lock:
+            for i in range(0, len(ids), 500):
+                chunk = ids[i:i + 500]
+                for r in self._con.execute(
+                    "SELECT request_id, harness, session_id FROM session_request_map "
+                    "WHERE request_id IN ({})".format(",".join("?" for _ in chunk)), chunk):
+                    out[r["request_id"]] = (r["harness"], r["session_id"])
+        return out
 
     def session_reports(self, since_ts):
         with self._lock:

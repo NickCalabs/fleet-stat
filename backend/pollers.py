@@ -194,6 +194,7 @@ def _normalize_spend_row(cfg, row, keys):
         "spend": row.get("spend") or 0.0,
         "call_type": row.get("call_type"),
         "status": md.get("status") or ("error" if md.get("error_information") else "success"),
+        "model_alias": raw_group,
     }
 
 

@@ -65,9 +65,19 @@ Authorization: Bearer <that harness's report_token>
 
 `start` (prompt sent) → `stop` (turn done) brackets a turn; every request
 from that harness inside the bracket belongs to that session. The token
-decides the harness. A ready-made Claude Code hook is in
-`clients/hooks/claude-code/`. Sessions with no reports stay labeled by
-harness + model.
+decides the harness. Add `"request_ids": [...]` (the response ids the
+harness received — LiteLLM logs the same id) for exact request→session links;
+side calls without an id (compaction, title generation) that fall inside the
+session's span are folded in. Ready-made clients:
+`clients/hooks/claude-code/` (hook, turn brackets) and
+`clients/hooks/omp/` (oh-my-pi: tails its session files, exact ids).
+Sessions with no reports stay labeled by harness + model.
+
+Context shown is the largest of a session's last 5 requests (exact-linked
+sessions: the newest linked request), so agent compaction shows up as the
+bar dropping; the all-time `ctx_peak` is kept alongside. Sessions list every
+model they touched (`models`) and the alias the client asked for
+(`model_alias`, e.g. a `-Deep` variant routed to the same weights).
 
 ### API for clients
 

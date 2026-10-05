@@ -48,15 +48,54 @@ def _report_intervals(cfg, reports, now):
     return intervals, meta
 
 
+CTX_RECENT = 5   # current context = largest of the session's last N requests
+
+
+def _summarize(rs, exact_ids=None):
+    """Token/ctx/model stats for one session's requests.
+
+    Context: agent harnesses compact (omp drops 130k→60k several times per
+    session) so the session's all-time max overstates the live context. The
+    largest of the last few requests still skips chat UIs' small title/tag
+    calls that follow each turn. With exact request links (harness-reported
+    ids) the newest request IS the conversation.
+    """
+    rs = sorted(rs, key=lambda r: r["start_ts"])
+    tok = lambda r: (r["prompt_tokens"] or 0) + (r["completion_tokens"] or 0)
+    linked = [r for r in rs if exact_ids and r["request_id"] in exact_ids]
+    recent = linked[-1:] if linked else rs[-CTX_RECENT:]
+    models = {}
+    for r in rs:
+        m = models.setdefault(r["model_group"], {"name": r["model_group"], "requests": 0,
+                                                 "tokens": 0, "aliases": set()})
+        m["requests"] += 1
+        m["tokens"] += r["total_tokens"] or 0
+        if r.get("model_alias") and r["model_alias"] != r["model_group"]:
+            m["aliases"].add(r["model_alias"])
+    return {
+        "failed_requests": sum(1 for r in rs if r.get("status") in ("failure", "error")),
+        "model": rs[-1]["model_group"],
+        "model_alias": rs[-1].get("model_alias"),
+        "models": sorted(({**m, "aliases": sorted(m["aliases"])} for m in models.values()),
+                         key=lambda m: -m["requests"]),
+        "first_ts": rs[0]["start_ts"],
+        "last_ts": max(r["end_ts"] or r["start_ts"] for r in rs),
+        "requests": len(rs),
+        "tokens_total": sum(r["total_tokens"] or 0 for r in rs),
+        "ctx_tokens": max(tok(r) for r in recent),
+        "ctx_peak": max(tok(r) for r in rs),
+    }
+
+
 def build_sessions(cfg, store, window_hours):
     """One row per conversation.
 
-    Open WebUI requests are assigned to their chat individually — a spend-log
-    request finishes within seconds of its assistant message hitting the chat
-    DB, so per-request nearest-message matching (±120s) is near-exact. This is
-    the unit users think in; time-gap sessions crossed wires whenever two chats
-    ran back-to-back on the same model. Other harnesses (no chat DB) still use
-    gap-based sessions.
+    Assignment, most exact first:
+    1. harness-reported request ids (POST /api/sessions/report) — exact;
+    2. Open WebUI: each request → the chat whose assistant message landed
+       within ±120s of it finishing;
+    3. harness-reported turn brackets (start/stop/ping intervals);
+    4. everything else: per harness+model sessions split on a 30-min gap.
     """
     now = time.time()
     gap = cfg["sessions"]["gap_seconds"]
@@ -69,11 +108,48 @@ def build_sessions(cfg, store, window_hours):
     chats = list(owui.get("chats") or [])
     users = owui.get("users") or {}
     harness_labels = {h["id"]: h.get("label", h["id"]) for h in cfg.get("harnesses", [])}
+    reporters = {h["id"]: {h["id"], *(h.get("match_harnesses") or [])}
+                 for h in cfg.get("harnesses", []) if h.get("report_token")}
 
-    # ── per-request chat assignment for the OWUI harness ──
-    assigned = {}          # chat_id -> [request rows]
-    loose = []             # requests for gap-based sessionization
+    # ── 1. exact links from harness-reported request ids ──
+    reported, exact_keys = {}, set()
+    rmap = store.request_map(r["request_id"] for r in rows) if reporters else {}
+    pending = []
     for r in rows:
+        key = rmap.get(r["request_id"])
+        if key:
+            reported.setdefault(key, []).append(r)
+            exact_keys.add(key)
+        else:
+            pending.append(r)
+
+    # ── 1b. a harness's side calls (compaction summaries, title generation)
+    # never appear in its transcript, so they carry no id. Unlinked requests
+    # from the same harness inside an exact session's span join the session
+    # whose nearest linked request is closest in time.
+    if reported:
+        spans = []
+        for key, rs in reported.items():
+            ts = sorted(r["start_ts"] for r in rs)
+            spans.append((ts[0] - 60, ts[-1] + 300, ts, key))
+        still = []
+        for r in pending:
+            best = None
+            for lo, hi, ts, key in spans:
+                if lo <= r["start_ts"] <= hi and r["harness"] in reporters.get(key[0], ()):
+                    d = _nearest(ts, r["start_ts"])
+                    if best is None or d < best[0]:
+                        best = (d, key)
+            if best:
+                reported[best[1]].append(r)
+            else:
+                still.append(r)
+        pending = still
+
+    # ── 2. per-request chat assignment for the OWUI harness ──
+    assigned = {}          # chat_id -> [request rows]
+    loose = []
+    for r in pending:
         if r["harness"] != owui_id or not chats:
             loose.append(r)
             continue
@@ -88,13 +164,16 @@ def build_sessions(cfg, store, window_hours):
         else:
             loose.append(r)
 
-    # ── harness-reported sessions (POST /api/sessions/report) ──
-    reporters = {h["id"]: {h["id"], *(h.get("match_harnesses") or [])}
-                 for h in cfg.get("harnesses", []) if h.get("report_token")}
-    reported = {}
-    if reporters and loose:
-        intervals, rmeta = _report_intervals(
-            cfg, store.session_reports(since - 7200), now)
+    # ── 3. harness-reported turn brackets ──
+    rmeta = {}
+    if reporters:
+        reports = store.session_reports(since - 7200)
+        intervals, rmeta = _report_intervals(cfg, reports, now)
+        missing = exact_keys - set(rmeta)
+        if missing:   # exact-linked sessions whose last title report predates the window
+            _, older = _report_intervals(cfg, [r for r in store.session_reports(now - 14 * 86400)
+                                               if (r["harness"], r["session_id"]) in missing], now)
+            rmeta.update(older)
         still_loose = []
         for r in loose:
             best = None
@@ -117,16 +196,9 @@ def build_sessions(cfg, store, window_hours):
     sessions = []
     for (harness, sid), rs in reported.items():
         sessions.append({
-            "failed_requests": sum(1 for r in rs if r.get("status") == "failure"),
+            **_summarize(rs, exact_ids=rmap),
             "harness": harness,
-            "model": max(rs, key=lambda r: r["start_ts"])["model_group"],
-            "first_ts": min(r["start_ts"] for r in rs),
-            "last_ts": max(r["end_ts"] or r["start_ts"] for r in rs),
-            "requests": len(rs),
-            "tokens_total": sum(r["total_tokens"] or 0 for r in rs),
-            "ctx_tokens": max((r["prompt_tokens"] or 0) + (r["completion_tokens"] or 0)
-                              for r in rs),
-            "title": rmeta[(harness, sid)]["title"],
+            "title": (rmeta.get((harness, sid)) or {}).get("title"),
             "chat_id": f"{harness}:{sid}",
             "reported": True,
         })
@@ -136,46 +208,29 @@ def build_sessions(cfg, store, window_hours):
     for cid, rs in assigned.items():
         c = chat_by_id[cid]
         sessions.append({
-            "failed_requests": sum(1 for r in rs if r.get("status") == "failure"),
+            **_summarize(rs),
             "harness": owui_id,
-            "model": max(rs, key=lambda r: r["start_ts"])["model_group"],
-            "first_ts": min(r["start_ts"] for r in rs),
-            "last_ts": max(r["end_ts"] or r["start_ts"] for r in rs),
-            "requests": len(rs),
-            "tokens_total": sum(r["total_tokens"] or 0 for r in rs),
-            "ctx_tokens": max((r["prompt_tokens"] or 0) + (r["completion_tokens"] or 0)
-                              for r in rs),
             "title": c.get("title"),
             "chat_id": cid,
             "user": users.get(c.get("user_id")),
         })
 
-    # ── gap-based sessions for everything else ──
+    # ── 4. gap-based sessions for everything else ──
     groups = {}
     for r in loose:
         groups.setdefault((r["harness"], r["model_group"]), []).append(r)
     gap_sessions = []
     for (harness, model_group), rs in groups.items():
         rs.sort(key=lambda r: r["start_ts"])
-        cur = None
+        cur, cur_end = [], 0
         for r in rs:
-            if cur is None or r["start_ts"] - cur["last_ts"] > gap:
-                cur = {
-                    "harness": harness, "model": model_group,
-                    "first_ts": r["start_ts"], "last_ts": r["start_ts"],
-                    "requests": 0, "tokens_total": 0, "ctx_tokens": 0,
-                    "failed_requests": 0,
-                }
-                gap_sessions.append(cur)
-            cur["last_ts"] = r["end_ts"] or r["start_ts"]
-            cur["requests"] += 1
-            if r.get("status") == "failure":
-                cur["failed_requests"] += 1
-            cur["tokens_total"] += r["total_tokens"] or 0
-            cur["ctx_tokens"] = max(
-                cur["ctx_tokens"],
-                (r["prompt_tokens"] or 0) + (r["completion_tokens"] or 0),
-            )
+            if cur and r["start_ts"] - cur_end > gap:
+                gap_sessions.append({**_summarize(cur), "harness": harness})
+                cur = []
+            cur.append(r)
+            cur_end = max(cur_end if len(cur) > 1 else 0, r["end_ts"] or r["start_ts"])
+        if cur:
+            gap_sessions.append({**_summarize(cur), "harness": harness})
     sessions.extend(gap_sessions)
 
     # ── OWUI chats with no spend rows (predate spend logging) -> estimated ──
