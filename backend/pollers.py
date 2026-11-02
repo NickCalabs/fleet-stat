@@ -34,6 +34,11 @@ PROM_QUERIES = {
     "gpu_mem_used": "nvidia_smi_memory_used_bytes",
     "gpu_mem_total": "nvidia_smi_memory_total_bytes",
     "gpu_temp": "nvidia_smi_temperature_gpu",
+    # °C of headroom before the GPU's own max operating temp (driver-reported,
+    # so it is right per card — a 600 W Blackwell and a 70 W Ada differ a lot)
+    "gpu_tlimit": "nvidia_smi_temperature_gpu_tlimit",
+    "gpu_hw_thermal": "nvidia_smi_clocks_event_reasons_hw_thermal_slowdown",
+    "gpu_sw_thermal": "nvidia_smi_clocks_event_reasons_sw_thermal_slowdown",
     "gpu_power": "nvidia_smi_power_draw_watts",
     "vllm_running": "vllm:num_requests_running",
     "vllm_waiting": "vllm:num_requests_waiting",
@@ -93,6 +98,9 @@ def _assemble_prom(cfg, data):
     g_used = _by_instance(data["gpu_mem_used"])
     g_total = _by_instance(data["gpu_mem_total"])
     g_temp = _by_instance(data["gpu_temp"])
+    g_tlimit = _by_instance(data["gpu_tlimit"])
+    g_hw_th = _by_instance(data["gpu_hw_thermal"])
+    g_sw_th = _by_instance(data["gpu_sw_thermal"])
     g_power = _by_instance(data["gpu_power"])
 
     nodes = {}
@@ -121,6 +129,8 @@ def _assemble_prom(cfg, data):
                 "vram_used": g_used.get(gi),
                 "vram_total": g_total.get(gi),
                 "temp": g_temp.get(gi),
+                "tlimit": g_tlimit.get(gi),
+                "thermal_slowdown": bool(g_hw_th.get(gi) or g_sw_th.get(gi)),
                 "power_w": g_power.get(gi),
             }
         nodes[n["id"]] = node
@@ -167,6 +177,25 @@ def _parse_iso(s):
         return None
 
 
+def _status(md):
+    err = md.get("error_information") or {}
+    if str(err.get("error_code")) == "499" or err.get("error_class") == "ClientDisconnected":
+        return "cancelled"     # client hung up (Esc / client timeout) — not a fleet fault
+    return md.get("status") or ("error" if err else "success")
+
+
+def _error_text(md):
+    from .events import redact   # local import: events imports this module
+    err = md.get("error_information") or {}
+    if not err:
+        return None
+    msg = (err.get("error_message") or "").replace("litellm.", "")
+    # LiteLLM repeats the class name and appends the fallback list; keep the cause
+    msg = msg.split("No fallback model group found")[0].strip()
+    code = err.get("error_code")
+    return redact(f"{code + ' ' if code else ''}{err.get('error_class') or ''}: {msg}")[:300]
+
+
 def _normalize_spend_row(cfg, row, keys):
     md = row.get("metadata") or {}
     api_key = row.get("api_key") or ""
@@ -193,8 +222,9 @@ def _normalize_spend_row(cfg, row, keys):
         "total_tokens": row.get("total_tokens") or 0,
         "spend": row.get("spend") or 0.0,
         "call_type": row.get("call_type"),
-        "status": md.get("status") or ("error" if md.get("error_information") else "success"),
+        "status": _status(md),
         "model_alias": raw_group,
+        "error": _error_text(md),
     }
 
 

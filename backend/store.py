@@ -54,7 +54,7 @@ REQUEST_COLS = [
     "key_hash", "key_alias", "harness",
     "user_id", "requester_ip",
     "prompt_tokens", "completion_tokens", "total_tokens",
-    "spend", "call_type", "status", "model_alias",
+    "spend", "call_type", "status", "model_alias", "error",
 ]
 
 
@@ -70,6 +70,8 @@ class Store:
             cols = {r[1] for r in self._con.execute("PRAGMA table_info(requests)")}
             if "model_alias" not in cols:   # the name the client asked for (e.g. a -Deep alias)
                 self._con.execute("ALTER TABLE requests ADD COLUMN model_alias TEXT")
+            if "error" not in cols:         # short error text for failed requests
+                self._con.execute("ALTER TABLE requests ADD COLUMN error TEXT")
 
     def upsert_requests(self, rows):
         if not rows:

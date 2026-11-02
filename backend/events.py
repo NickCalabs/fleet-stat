@@ -71,7 +71,13 @@ class Detector:
         self.cfg = cfg
         self.store = store
         ev = cfg.get("events") or {}
-        self.gpu_hot = ev.get("gpu_temp_warn", 85)
+        # Heat alerts use the driver's per-card headroom (tlimit) when the
+        # exporter has it; gpu_temp_warn is only the fallback for cards without.
+        self.tlimit_warn = ev.get("gpu_tlimit_warn", 5)       # °C below the card's limit
+        self.gpu_hot = ev.get("gpu_temp_warn", 88)
+        self.hot_hold = ev.get("gpu_hot_seconds", 60)          # must stay hot this long
+        self.thermal = {}   # node -> {"since", "alerted", "cool_since", "last_alert"}
+        self.slowing = set()
         self.retention_days = ev.get("retention_days", 14)
         self.prev = None
         self.fail_cursor = time.time()
@@ -85,8 +91,10 @@ class Detector:
             if m.get("engine") in ("vllm",):
                 snap["models"][name] = (bool(m.get("up")), m.get("served_model"))
         for nid, n in (prom.get("nodes") or {}).items():
-            snap["nodes"][nid] = {"up": n.get("up"),
-                                  "gpu_temp": (n.get("gpu") or {}).get("temp")}
+            g = n.get("gpu") or {}
+            snap["nodes"][nid] = {"up": n.get("up"), "gpu_temp": g.get("temp"),
+                                  "gpu_tlimit": g.get("tlimit"),
+                                  "gpu_throttle": g.get("thermal_slowdown")}
         for nid, o in state["ollama"].items():
             if "loaded" in o:
                 snap["ollama"][nid] = frozenset(o.get("loaded") or [])
@@ -122,17 +130,7 @@ class Detector:
                 ev.append(make_event(now, nid, "detector", "node",
                                      "info" if n["up"] else "error",
                                      f"{nid} {'back up' if n['up'] else 'unreachable'}"))
-            t = n.get("gpu_temp")
-            if t is not None:
-                if t >= self.gpu_hot and nid not in self.hot:
-                    self.hot.add(nid)
-                    ev.append(make_event(now, nid, "detector", "thermal", "warn",
-                                         f"{nid} GPU hot: {t:.0f}°C",
-                                         f"threshold {self.gpu_hot}°C"))
-                elif t < self.gpu_hot - 5 and nid in self.hot:
-                    self.hot.discard(nid)
-                    ev.append(make_event(now, nid, "detector", "thermal", "info",
-                                         f"{nid} GPU cooled to {t:.0f}°C"))
+            ev += self._thermal(nid, n, now)
 
         for nid, loaded in b["ollama"].items():
             was = a["ollama"].get(nid)
@@ -173,6 +171,49 @@ class Detector:
                                      f"source {src} recovered"))
         return ev
 
+    def _thermal(self, nid, n, now):
+        """Debounced heat alert: hot for hot_hold seconds → one warning; clears
+        only after a clear margin for 2 min; at most one alert per 30 min.
+        Actual thermal throttling (clocks cut for heat) is always an error."""
+        ev = []
+        t, margin = n.get("gpu_temp"), n.get("gpu_tlimit")
+        if t is None:
+            return ev
+        if margin is not None:
+            hot, cool = margin <= self.tlimit_warn, margin >= self.tlimit_warn + 8
+            why = f"{margin:.0f}°C below its limit"
+        else:
+            hot, cool = t >= self.gpu_hot, t <= self.gpu_hot - 8
+            why = f"threshold {self.gpu_hot}°C"
+        st = self.thermal.setdefault(nid, {"since": None, "alerted": False,
+                                           "cool_since": None, "last_alert": 0})
+        if hot:
+            st["cool_since"] = None
+            st["since"] = st["since"] or now
+            if (not st["alerted"] and now - st["since"] >= self.hot_hold
+                    and now - st["last_alert"] > 1800):
+                st["alerted"], st["last_alert"] = True, now
+                ev.append(make_event(now, nid, "detector", "thermal", "warn",
+                                     f"{nid} GPU hot: {t:.0f}°C ({why})"))
+        else:
+            st["since"] = None
+            if st["alerted"] and cool:
+                st["cool_since"] = st["cool_since"] or now
+                if now - st["cool_since"] >= 120:
+                    st["alerted"], st["cool_since"] = False, None
+                    ev.append(make_event(now, nid, "detector", "thermal", "info",
+                                         f"{nid} GPU cooled to {t:.0f}°C"))
+        if n.get("gpu_throttle") and nid not in self.slowing:
+            self.slowing.add(nid)
+            ev.append(make_event(now, nid, "detector", "thermal", "error",
+                                 f"{nid} GPU is THROTTLING for heat at {t:.0f}°C",
+                                 "the driver is cutting clocks to protect the card"))
+        elif not n.get("gpu_throttle") and nid in self.slowing:
+            self.slowing.discard(nid)
+            ev.append(make_event(now, nid, "detector", "thermal", "info",
+                                 f"{nid} GPU thermal throttling ended"))
+        return ev
+
     def _litellm_failures(self, now):
         """One event per (harness, model) burst of failed requests."""
         rows = [r for r in self.store.recent_requests(self.fail_cursor - 900)
@@ -192,7 +233,9 @@ class Detector:
                 last, None, "litellm", "request", "error",
                 f"{len(rs)} failed request{'s' if len(rs) > 1 else ''}: "
                 f"{labels.get(h, h)} → {m or '?'}",
-                "from " + ", ".join(sorted({r.get('requester_ip') or '?' for r in rs})),
+                "\n".join(sorted({r["error"] for r in rs if r.get("error")})[:3]
+                          + ["from " + ", ".join(sorted({r.get('requester_ip') or '?'
+                                                         for r in rs}))]),
                 key="fail|" + "|".join(sorted(r["request_id"] for r in rs))))
         return ev
 

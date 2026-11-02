@@ -115,7 +115,13 @@ harnesses:
 
 events:
   retention_days: 14
-  gpu_temp_warn: 85            # °C — emits a warning event on crossing
+  # Heat: warns when a GPU stays within gpu_tlimit_warn °C of ITS OWN max
+  # operating temp (driver-reported headroom) for gpu_hot_seconds; errors if the
+  # driver actually throttles for heat. gpu_temp_warn is the fallback for
+  # exporters without temperature_gpu_tlimit.
+  gpu_tlimit_warn: 5
+  gpu_hot_seconds: 60
+  gpu_temp_warn: 88
   # Optional shared secret for POST /api/events/ingest (log collector).
   ingest_token: change-me-another-random-string
 
